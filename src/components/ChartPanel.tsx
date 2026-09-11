@@ -7,9 +7,10 @@ interface Props {
   values: number[];
   type?: 'line' | 'bar' | 'doughnut';
   label?: string;
+  valueFormatter?: (value: number) => string;
 }
 
-export default function ChartPanel({ labels, values, type = 'line', label = 'P&L' }: Props) {
+export default function ChartPanel({ labels, values, type = 'line', label = 'P&L', valueFormatter = (value) => String(value) }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [themeVersion, setThemeVersion] = useState(0);
 
@@ -25,7 +26,11 @@ export default function ChartPanel({ labels, values, type = 'line', label = 'P&L
           label,
           data: values,
           borderColor: token('--chart-line'),
-          backgroundColor: type === 'line' ? token('--chart-line-fill') : [token('--profit'), token('--loss'), token('--chart-neutral'), token('--info'), token('--warning')],
+          backgroundColor: type === 'line'
+            ? token('--chart-line-fill')
+            : type === 'bar'
+              ? values.map((value) => value >= 0 ? token('--chart-bull') : token('--chart-bear'))
+              : [token('--profit'), token('--loss'), token('--chart-neutral'), token('--info'), token('--warning')],
           borderWidth: 2,
           pointRadius: type === 'line' ? 0 : undefined,
           pointHoverRadius: 4,
@@ -36,7 +41,7 @@ export default function ChartPanel({ labels, values, type = 'line', label = 'P&L
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: type === 'doughnut', labels: { color: token('--text-secondary'), boxWidth: 10 } }, tooltip: { displayColors: false, backgroundColor: token('--surface'), titleColor: token('--text-primary'), bodyColor: token('--text-secondary'), borderColor: token('--border'), borderWidth: 1 } },
+        plugins: { legend: { display: type === 'doughnut', labels: { color: token('--text-secondary'), boxWidth: 10 } }, tooltip: { displayColors: false, backgroundColor: token('--surface'), titleColor: token('--text-primary'), bodyColor: token('--text-secondary'), borderColor: token('--border'), borderWidth: 1, callbacks: { label: (context) => `${label}: ${valueFormatter(Number(context.parsed))}` } } },
         scales: type === 'doughnut' ? undefined : {
           x: { grid: { display: false }, ticks: { color: token('--text-tertiary'), maxTicksLimit: 7, font: { size: 10 } } },
           y: { grid: { color: token('--chart-grid') }, ticks: { color: token('--text-tertiary'), maxTicksLimit: 5, font: { size: 10 } } },
@@ -44,7 +49,7 @@ export default function ChartPanel({ labels, values, type = 'line', label = 'P&L
       },
     });
     return () => chart.destroy();
-  }, [labels.join('|'), values.join('|'), type, label, themeVersion]);
+  }, [labels.join('|'), values.join('|'), type, label, valueFormatter, themeVersion]);
 
   useEffect(() => subscribeToThemeChange(() => setThemeVersion((version) => version + 1)), []);
 

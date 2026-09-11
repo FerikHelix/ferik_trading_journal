@@ -45,4 +45,21 @@ test('first CSV import creates an account and commits the preview', async ({ pag
   await page.getByRole('button', { name: 'Simpan import' }).click();
   await expect(page.getByRole('heading', { name: 'Import selesai' })).toBeVisible();
   await expect(page.getByText(/1 data baru/)).toBeVisible();
+  await page.goto('/analytics/');
+  await expect(page.getByRole('heading', { name: 'Cumulative P&L' })).toBeVisible();
+  await expect(page.locator('.chart-box canvas').first()).toBeVisible();
+  await page.getByLabel('Periode').selectOption('custom');
+  await page.getByLabel('Dari').fill('2026-09-01');
+  await page.getByLabel('Sampai').fill('2026-09-01');
+  await expect(page.getByText('1 closed position')).toBeVisible();
+});
+
+test('analytics filter bar and themed chart containers render', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto('/analytics/');
+  await expect(page.getByLabel('Periode')).toBeVisible();
+  await page.getByLabel('Periode').selectOption('custom');
+  await expect(page.getByLabel('Dari')).toBeVisible();
+  await expect(page.getByLabel('Sampai')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });

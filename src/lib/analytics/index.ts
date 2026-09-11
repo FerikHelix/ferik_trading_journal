@@ -37,6 +37,7 @@ export interface SeriesPoint {
   wins: number;
   losses: number;
   breakeven: number;
+  winRate: number | null;
   netProfit: string | null;
 }
 
@@ -51,6 +52,8 @@ export interface AnalyticsResult {
   metrics: AnalyticsMetrics;
   cumulativeProfit: EquityPoint[];
   monthly: SeriesPoint[];
+  pnlByPeriod: SeriesPoint[];
+  pnlGranularity: 'day' | 'month';
   bySymbol: SeriesPoint[];
   byStrategy: SeriesPoint[];
   bySession: SeriesPoint[];
@@ -105,8 +108,20 @@ function group(
     wins: rows.filter((row) => outcomeOf(row) === 'win').length,
     losses: rows.filter((row) => outcomeOf(row) === 'loss').length,
     breakeven: rows.filter((row) => outcomeOf(row) === 'breakeven').length,
+    winRate: (() => {
+      const wins = rows.filter((row) => outcomeOf(row) === 'win').length;
+      const losses = rows.filter((row) => outcomeOf(row) === 'loss').length;
+      return wins + losses ? wins / (wins + losses) : null;
+    })(),
     netProfit: currencyAvailable ? normalized(rows.reduce((sum, row) => sum.plus(row.netProfit), new Decimal(0))) : null,
   })).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function periodGranularity(positions: Position[]) {
+  if (positions.length < 2) return 'day' as const;
+  const first = new Date(positions[0].closeAt!).getTime();
+  const last = new Date(positions.at(-1)!.closeAt!).getTime();
+  return last - first <= 1000 * 60 * 60 * 24 * 92 ? 'day' as const : 'month' as const;
 }
 
 function sessionFor(timestamp: string) {
@@ -187,10 +202,14 @@ export function calculateAnalytics(
   };
 
   const keyDate = (position: Position) => new Date(position.closeAt!);
+  const pnlGranularity = periodGranularity(positions);
+  const pnlByPeriod = group(positions, monetary, (position) => position.closeAt!.slice(0, pnlGranularity === 'day' ? 10 : 7));
   return {
     metrics: resultMetrics,
     cumulativeProfit,
     monthly: group(positions, monetary, (p) => p.closeAt!.slice(0, 7)),
+    pnlByPeriod,
+    pnlGranularity,
     bySymbol: group(positions, monetary, (p) => p.symbol),
     byStrategy: group(positions, monetary, (p) => journalByPosition.get(p.id)?.strategy ?? ''),
     bySession: group(positions, monetary, (p) => sessionFor(p.closeAt!)),

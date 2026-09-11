@@ -26,4 +26,24 @@ describe('calculateAnalytics', () => {
     expect(result.cumulativeProfit).toEqual([]);
     expect(calculateAnalytics([position('a', '100', '2026-01-01T00:00:00Z'), position('b', '90', '2026-01-02T00:00:00Z', 'eur')], accounts, [], { currency: 'USD' }).metrics.netProfit).toBe('100');
   });
+
+  it('filters by close date and exposes win rate for breakdown rows', () => {
+    const rows = [
+      position('a', '100', '2026-01-01T10:00:00Z'),
+      position('b', '-20', '2026-01-03T10:00:00Z'),
+      { ...position('c', '40', '2026-01-04T10:00:00Z'), symbol: 'EURUSD', side: 'sell' as const },
+    ];
+    const result = calculateAnalytics(rows, accounts, [], { from: '2026-01-02T00:00:00.000Z', to: '2026-01-03T23:59:59.999Z' });
+    expect(result.metrics).toMatchObject({ totalPositions: 1, netProfit: '-20', winRate: 0 });
+    expect(result.bySymbol).toEqual([expect.objectContaining({ key: 'XAUUSD', count: 1, winRate: 0 })]);
+    expect(result.pnlGranularity).toBe('day');
+    expect(result.pnlByPeriod).toEqual([expect.objectContaining({ key: '2026-01-03', netProfit: '-20' })]);
+  });
+
+  it('uses monthly P&L buckets for a period longer than 92 days', () => {
+    const rows = [position('a', '10', '2026-01-01T10:00:00Z'), position('b', '20', '2026-05-10T10:00:00Z')];
+    const result = calculateAnalytics(rows, accounts);
+    expect(result.pnlGranularity).toBe('month');
+    expect(result.pnlByPeriod.map((point) => point.key)).toEqual(['2026-01', '2026-05']);
+  });
 });
