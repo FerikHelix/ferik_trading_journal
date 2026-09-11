@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import Decimal from 'decimal.js';
-import type { Account, AppSettings, BalanceEvent, Deal, ImportBatch, Journal, Position } from '../domain/types';
+import type { Account, AppSettings, BalanceEvent, Deal, ImportBatch, Journal, Position, WeeklyReview } from '../domain/types';
 
 export const BACKUP_SCHEMA_VERSION = 1;
 export const PBKDF2_ITERATIONS = 600_000;
@@ -13,6 +13,7 @@ export interface BackupSnapshot {
   deals: Deal[];
   positions: Position[];
   journals: Journal[];
+  weeklyReviews: WeeklyReview[];
   balanceEvents: BalanceEvent[];
   settings: AppSettings[];
 }
@@ -38,6 +39,7 @@ const importBatchSchema = z.object({ id: z.string(), accountId: z.string(), file
 const dealSchema = z.object({ id: z.string(), accountId: z.string(), ticketId: z.string(), orderId: z.string(), positionId: z.string(), symbol: z.string(), side: z.enum(['buy', 'sell']), event: z.enum(['entry', 'exit', 'balance', 'unknown']), volume: decimalString, price: decimalString, occurredAt: isoString, sourceTime: z.string(), profit: decimalString, commission: decimalString, swap: decimalString, stopLoss: decimalString.optional(), takeProfit: decimalString.optional(), sourceRow: z.number().int().positive(), importBatchId: z.string().optional() });
 const positionSchema = z.object({ id: z.string(), accountId: z.string(), positionId: z.string(), symbol: z.string(), side: z.enum(['buy', 'sell']), openAt: isoString, closeAt: isoString.optional(), averageOpenPrice: decimalString, averageClosePrice: decimalString, volume: decimalString, grossProfit: decimalString, commission: decimalString, swap: decimalString, netProfit: decimalString, stopLoss: decimalString.optional(), takeProfit: decimalString.optional(), status: z.enum(['closed', 'open']), dealIds: z.array(z.string()), groupingFallback: z.boolean().optional() });
 const journalSchema = z.object({ id: z.string(), positionId: z.string(), strategy: z.string(), setup: z.string(), thesis: z.string(), emotion: z.string(), mistakes: z.array(z.string()), tags: z.array(z.string()), executionRating: z.number().min(1).max(5).optional(), riskAmount: decimalString.optional(), plannedRiskReward: decimalString.optional(), review: z.string(), createdAt: isoString, updatedAt: isoString });
+const weeklyReviewSchema = z.object({ id: z.string(), accountId: z.string(), weekStart: isoString, weekEnd: isoString, wentWell: z.string(), toImprove: z.string(), lesson: z.string(), nextWeekFocus: z.string(), createdAt: isoString, updatedAt: isoString });
 const balanceEventSchema = z.object({ id: z.string(), accountId: z.string(), ticketId: z.string(), type: z.enum(['deposit', 'withdrawal', 'credit', 'other']), amount: decimalString, occurredAt: isoString, comment: z.string() });
 const settingsSchema = z.object({ id: z.literal('app'), schemaVersion: z.number().int().positive(), displayTimeZone: z.string(), theme: z.enum(['light', 'dark', 'system']), currencyDisplay: z.literal('account') });
 
@@ -49,6 +51,7 @@ const snapshotSchema = z.object({
   deals: z.array(dealSchema),
   positions: z.array(positionSchema),
   journals: z.array(journalSchema),
+  weeklyReviews: z.array(weeklyReviewSchema).default([]),
   balanceEvents: z.array(balanceEventSchema),
   settings: z.array(settingsSchema),
 });

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { clearAllData, createAccount, db, importParsedData, TradingJournalDatabase, upsertJournal } from '../../src/lib/db/database';
+import { clearAllData, createAccount, db, getWeeklyReview, importParsedData, TradingJournalDatabase, upsertJournal, upsertWeeklyReview } from '../../src/lib/db/database';
 import { aggregatePositions, parseDecimal, parseExnessCsv } from '../../src/lib/import';
 import type { Deal } from '../../src/lib/domain/types';
 
@@ -103,6 +103,12 @@ describe('Dexie schema', () => {
     await database.deals.bulkAdd([base, { ...base, id: 'b:1', accountId: 'b' }]);
     expect(await database.deals.count()).toBe(2);
   });
+
+  it('stores one weekly reflection for each account and week', async () => {
+    await database.open();
+    await database.weeklyReviews.add({ id: 'r', accountId: 'a', weekStart: '2026-09-07T00:00:00.000Z', weekEnd: '2026-09-13T23:59:59.999Z', wentWell: '', toImprove: '', lesson: '', nextWeekFocus: '', createdAt: '2026-09-07T00:00:00.000Z', updatedAt: '2026-09-07T00:00:00.000Z' });
+    await expect(database.weeklyReviews.add({ id: 'r2', accountId: 'a', weekStart: '2026-09-07T00:00:00.000Z', weekEnd: '2026-09-13T23:59:59.999Z', wentWell: '', toImprove: '', lesson: '', nextWeekFocus: '', createdAt: '2026-09-07T00:00:00.000Z', updatedAt: '2026-09-07T00:00:00.000Z' })).rejects.toThrow();
+  });
 });
 
 describe('atomic import workflow', () => {
@@ -131,5 +137,12 @@ describe('atomic import workflow', () => {
     await importParsedData(a.id, 'a.csv', await parseExnessCsv(csv, a.id, 'UTC'));
     await importParsedData(b.id, 'b.csv', await parseExnessCsv(csv, b.id, 'UTC'));
     expect(await db.deals.count()).toBe(2);
+  });
+
+  it('upserts a weekly review without affecting trading data', async () => {
+    const account = await createAccount({ label: 'A', accountNumber: '1', currency: 'USD', sourceTimeZone: 'UTC' });
+    await upsertWeeklyReview({ accountId: account.id, weekStart: '2026-09-07T00:00:00.000Z', weekEnd: '2026-09-13T23:59:59.999Z', lesson: 'Sabar' });
+    const stored = await getWeeklyReview(account.id, '2026-09-07T00:00:00.000Z');
+    expect(stored?.lesson).toBe('Sabar');
   });
 });

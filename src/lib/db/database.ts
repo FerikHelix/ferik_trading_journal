@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type {
-  Account, AppSettings, BalanceEvent, Deal, ImportBatch, Journal, ParsedImport, Position,
+  Account, AppSettings, BalanceEvent, Deal, ImportBatch, Journal, ParsedImport, Position, WeeklyReview,
 } from '../domain/types';
 import { aggregatePositions } from '../import/aggregate';
 import { EXNESS_PARSER_VERSION } from '../import/parser';
@@ -11,6 +11,7 @@ export class TradingJournalDatabase extends Dexie {
   deals!: EntityTable<Deal, 'id'>;
   positions!: EntityTable<Position, 'id'>;
   journals!: EntityTable<Journal, 'id'>;
+  weeklyReviews!: EntityTable<WeeklyReview, 'id'>;
   balanceEvents!: EntityTable<BalanceEvent, 'id'>;
   settings!: EntityTable<AppSettings, 'id'>;
 
@@ -24,6 +25,9 @@ export class TradingJournalDatabase extends Dexie {
       journals: '&id, &positionId, strategy, updatedAt, *tags',
       balanceEvents: '&id, &[accountId+ticketId], accountId, occurredAt, type, importBatchId',
       settings: '&id',
+    });
+    this.version(2).stores({
+      weeklyReviews: '&id, &[accountId+weekStart], accountId, weekStart, updatedAt',
     });
     this.on('populate', () => this.settings.add(defaultSettings()));
   }
@@ -103,6 +107,25 @@ export async function upsertJournal(input: JournalInput): Promise<Journal> {
   };
   await db.journals.put(journal);
   return journal;
+}
+
+export type WeeklyReviewInput = Pick<WeeklyReview, 'accountId' | 'weekStart' | 'weekEnd'> & Partial<Omit<WeeklyReview, 'accountId' | 'weekStart' | 'weekEnd' | 'updatedAt'>>;
+
+export async function getWeeklyReview(accountId: string, weekStart: string): Promise<WeeklyReview | undefined> {
+  return db.weeklyReviews.where('[accountId+weekStart]').equals([accountId, weekStart]).first();
+}
+
+export async function upsertWeeklyReview(input: WeeklyReviewInput): Promise<WeeklyReview> {
+  const existing = await getWeeklyReview(input.accountId, input.weekStart);
+  const now = new Date().toISOString();
+  const review: WeeklyReview = {
+    id: existing?.id ?? input.id ?? id('weekly-review'), accountId: input.accountId, weekStart: input.weekStart, weekEnd: input.weekEnd,
+    wentWell: input.wentWell ?? existing?.wentWell ?? '', toImprove: input.toImprove ?? existing?.toImprove ?? '',
+    lesson: input.lesson ?? existing?.lesson ?? '', nextWeekFocus: input.nextWeekFocus ?? existing?.nextWeekFocus ?? '',
+    createdAt: existing?.createdAt ?? input.createdAt ?? now, updatedAt: now,
+  };
+  await db.weeklyReviews.put(review);
+  return review;
 }
 
 export interface ImportCommitResult {

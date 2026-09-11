@@ -91,6 +91,19 @@ export interface Journal {
   updatedAt: string;
 }
 
+export interface WeeklyReview {
+  id: string;
+  accountId: string;
+  weekStart: string;
+  weekEnd: string;
+  wentWell: string;
+  toImprove: string;
+  lesson: string;
+  nextWeekFocus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BalanceEvent {
   id: string;
   accountId: string;

@@ -5,7 +5,7 @@ test('all static routes render and navigation works', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Selamat datang kembali' })).toBeVisible();
   await page.getByRole('link', { name: /Import/ }).first().click();
   await expect(page.getByRole('heading', { name: 'Import riwayat Exness' })).toBeVisible();
-  for (const route of ['trades', 'journal', 'analytics', 'settings']) {
+  for (const route of ['trades', 'journal', 'analytics', 'review', 'settings']) {
     const response = await page.goto(`/${route}/`);
     expect(response?.ok()).toBeTruthy();
     await expect(page.locator('main')).toBeVisible();
@@ -52,6 +52,11 @@ test('first CSV import creates an account and commits the preview', async ({ pag
   await page.getByLabel('Dari').fill('2026-09-01');
   await page.getByLabel('Sampai').fill('2026-09-01');
   await expect(page.getByText('1 closed position')).toBeVisible();
+  await page.goto('/review/');
+  await page.getByRole('button', { name: 'Minggu sebelumnya' }).click();
+  await expect(page.getByText('Kelengkapan journal')).toBeVisible();
+  await page.getByLabel('Lesson minggu ini').fill('Tunggu konfirmasi sebelum entry.');
+  await expect(page.getByText('✓ Tersimpan')).toBeVisible();
 });
 
 test('analytics filter bar and themed chart containers render', async ({ page }) => {
