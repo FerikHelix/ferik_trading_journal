@@ -1,0 +1,60 @@
+---
+import '../styles/global.css';
+import ThemeToggle from '../components/ThemeToggle';
+
+interface Props { title: string; description?: string; active: string; }
+const { title, description = 'Trading journal local-first untuk evaluasi yang lebih jernih.', active } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const href = (path: string) => `${base}${path.replace(/^\//, '')}`;
+const nav = [
+  ['dashboard', '', '⌁', 'Dashboard'],
+  ['trades', 'trades/', '↕', 'Trades'],
+  ['import', 'import/', '⇧', 'Import'],
+  ['analytics', 'analytics/', '⌗', 'Analytics'],
+  ['journal', 'journal/', '✎', 'Journal'],
+  ['settings', 'settings/', '⚙', 'Settings'],
+];
+---
+<!doctype html>
+<html lang="id" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="theme-color" content="#0B0F14" />
+    <meta name="description" content={description} />
+    <title>{title} · Ferik Journal</title>
+    <script is:inline>
+      (() => {
+        const key = 'ferik-journal-theme';
+        const saved = localStorage.getItem(key);
+        const preference = saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
+        const theme = preference === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : preference;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0B0F14' : '#F6F8FA');
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Navigasi utama">
+        <a class="brand" href={href('')}><span class="brand-mark">F</span><span>Ferik Journal</span></a>
+        <p class="nav-label">Workspace</p>
+        <nav class="nav-list">
+          {nav.map(([id, path, icon, label]) => <a class:list={['nav-link', { active: active === id }]} href={href(path)} aria-current={active === id ? 'page' : undefined}><span class="nav-icon">{icon}</span>{label}</a>)}
+        </nav>
+        <div class="privacy-note"><strong>● Local & private</strong>Data tersimpan hanya di browser perangkat ini.</div>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <span class="topbar-title">Trading workspace</span>
+          <div class="topbar-actions"><span class="account-pill"><span class="status-dot"></span> Penyimpanan lokal</span><ThemeToggle client:load /></div>
+        </header>
+        <div class="content"><slot /></div>
+      </main>
+      <nav class="mobile-nav" aria-label="Navigasi mobile">
+        {nav.map(([id, path, icon, label]) => <a class:list={['nav-link', { active: active === id }]} href={href(path)} aria-current={active === id ? 'page' : undefined}><span class="nav-icon">{icon}</span>{label}</a>)}
+      </nav>
+    </div>
+  </body>
+</html>
