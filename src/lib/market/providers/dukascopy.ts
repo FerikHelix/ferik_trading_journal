@@ -38,13 +38,18 @@ let counter = 0;
 /**
  * Circuit breaker.
  *
- * Some ISPs (several Indonesian ones included) blackhole this host, so the
- * request hangs until it times out. Paying that per instrument meant a
- * watchlist of four took the better part of a minute to fall back. After one
- * network-level failure the whole provider is skipped for a while, and the
- * fallbacks answer immediately.
+ * When this host is unreachable the request hangs until it times out, and
+ * paying that once per instrument makes a whole watchlist crawl. The breaker
+ * skips the provider entirely for a short while so the fallbacks answer
+ * immediately.
+ *
+ * It takes TWO consecutive network failures to trip. Dukascopy is normally
+ * healthy, so a single hiccup must not disable the only source of silver, oil
+ * and the forex majors for everything else on the page.
  */
-const COOLDOWN_MS = 10 * 60_000;
+const COOLDOWN_MS = 3 * 60_000;
+const FAILURES_BEFORE_TRIP = 2;
+let consecutiveFailures = 0;
 const COOLDOWN_KEY = 'feriktrading-dukascopy-cooldown';
 
 /**
@@ -64,11 +69,22 @@ export function isDukascopyCoolingDown(): boolean {
   return Date.now() < readCooldown();
 }
 
-function tripBreaker() {
+function noteFailure() {
+  consecutiveFailures += 1;
+  if (consecutiveFailures < FAILURES_BEFORE_TRIP) return;
   try {
     sessionStorage.setItem(COOLDOWN_KEY, String(Date.now() + COOLDOWN_MS));
   } catch {
     /* private mode — the in-flight page still benefits from the thrown error */
+  }
+}
+
+function noteSuccess() {
+  consecutiveFailures = 0;
+  try {
+    sessionStorage.removeItem(COOLDOWN_KEY);
+  } catch {
+    /* nothing to clear */
   }
 }
 
@@ -166,7 +182,7 @@ export async function fetchDukascopyCandles(
   try {
     element = await ensureFrame();
   } catch (error) {
-    tripBreaker();
+    noteFailure();
     throw error;
   }
   const id = `duk-${(counter += 1)}`;
@@ -192,7 +208,7 @@ export async function fetchDukascopyCandles(
   }).catch((error: unknown) => {
     // A blocked or unreachable host fails the same way for every symbol, so
     // stop retrying it for the rest of the cooldown.
-    if (error instanceof MarketDataError && error.kind === 'network') tripBreaker();
+    if (error instanceof MarketDataError && error.kind === 'network') noteFailure();
     throw error;
   });
 
@@ -216,5 +232,6 @@ export async function fetchDukascopyCandles(
     throw new MarketDataError('Dukascopy tidak mengembalikan candle yang valid.', 'upstream', 'dukascopy');
   }
 
+  noteSuccess();
   return candles.sort((a, b) => a.t - b.t);
 }

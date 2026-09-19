@@ -192,8 +192,8 @@ export default function FundamentalApp() {
 
       {settings && failed.length > 0 && (
         <Notice tone="warning" title="Sebagian instrumen tidak bisa dimuat">
-          {failed.map((row) => row.label).join(', ')} gagal diambil. Penyebab paling umum: Dukascopy
-          diblokir oleh ISP. Coba VPN atau DNS alternatif, atau isi data proxy di{' '}
+          {failed.map((row) => row.label).join(', ')} gagal diambil — biasanya karena Dukascopy
+          sedang tidak bisa dihubungi. Coba Refresh, atau isi data proxy di{' '}
           <a href={`${base}settings/`}>Settings</a>.
         </Notice>
       )}

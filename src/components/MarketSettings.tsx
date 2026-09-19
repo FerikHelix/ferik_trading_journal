@@ -9,8 +9,8 @@ import { clearMarketCache, loadAppSettings, updateMarketSettings } from './dataC
 const TIMEFRAMES: MarketTimeframe[] = ['M15', 'H1', 'H4'];
 
 /**
- * Instruments whose only source is Dukascopy, which some ISPs block. Flagged in
- * the picker so the watchlist does not quietly contain things that cannot load.
+ * Instruments with no fallback source. Flagged in the picker so the watchlist
+ * does not quietly contain things that go dark whenever Dukascopy does.
  */
 const SINGLE_SOURCE = new Set(
   INSTRUMENTS
@@ -69,10 +69,11 @@ export default function MarketSettings() {
       </p>
 
       <Notice tone="info" title="Kalau sebagian instrumen tidak muncul">
-        Dukascopy adalah satu-satunya sumber gratis yang punya perak, minyak, dan forex major —
-        dan sebagian ISP di Indonesia memblokirnya. Kalau itu terjadi, BTC dan emas tetap jalan
-        lewat Binance/Gate.io, sisanya kosong sampai kamu pakai VPN, DNS alternatif, atau mengisi
-        data proxy di bawah.
+        Dukascopy adalah satu-satunya sumber gratis yang punya perak, minyak, dan forex major.
+        Kalau ia sedang tidak bisa dihubungi, BTC dan emas tetap jalan lewat Binance/Gate.io dan
+        perak lewat CoinGecko — sisanya kosong sampai ia pulih atau kamu mengisi data proxy di bawah.
+        <strong>GBPUSD</strong> diketahui tidak mengembalikan data dari Dukascopy, jadi ia tidak
+        ikut watchlist default.
       </Notice>
 
       <div className="field u-mt-4">

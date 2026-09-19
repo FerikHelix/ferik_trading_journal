@@ -184,14 +184,19 @@ export default function CandleChart({ candles, blocks, digits, height = 280, lab
       close: candle.c,
     })));
 
-    // A mitigated or invalidated zone is history, so it is drawn faintly; the
-    // live ones stay prominent.
-    const zones = new OrderBlockZones(blocks, (block) => {
+    // Only zones price can still react to are drawn. Mitigated and invalidated
+    // ones were previously painted faintly, which is what made the chart hard
+    // to read — several stacked rectangles competing with the candles.
+    const live = blocks.filter((block) =>
+      block.status === 'fresh' || block.status === 'approaching' || block.status === 'touched');
+
+    const zones = new OrderBlockZones(live, (block) => {
       const base = block.direction === 'bullish' ? tokens.bull : tokens.bear;
-      const spent = block.status === 'mitigated' || block.status === 'invalid';
+      // The zone price is actually at gets a stronger fill than a distant one.
+      const near = block.status === 'touched' || block.status === 'approaching';
       return {
-        fill: withAlpha(base, spent ? 0.06 : 0.16),
-        stroke: withAlpha(base, spent ? 0.25 : 0.7),
+        fill: withAlpha(base, near ? 0.18 : 0.1),
+        stroke: withAlpha(base, near ? 0.8 : 0.45),
       };
     });
     series.attachPrimitive(zones);

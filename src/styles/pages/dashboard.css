@@ -1,6 +1,45 @@
-.dashboard-page { gap: 18px; }
-.dashboard-main-grid { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(260px, .85fr); gap: 16px; }
-.dashboard-secondary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.dashboard-page { gap: 20px; }
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.section-head h2 { margin: 0; }
+
+/* Compact bias strip — deliberately smaller than the Fundamental page cards,
+   because this is a glance, not the analysis. */
+.bias-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.bias-tile {
+  display: grid;
+  gap: 6px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.bias-tile:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.bias-tile__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bias-tile__head strong { font-size: 12.5px; font-weight: 700; }
+.bias-tile__price { font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
+.bias-tile__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; }
+
+.signal-rows { display: grid; margin: 0 -18px -18px; }
+.signal-row {
+  display: grid;
+  grid-template-columns: 16px minmax(68px, auto) minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.signal-row:first-child { border-top: 0; }
+.signal-row:hover { background: var(--table-hover); }
+.signal-row strong { font-weight: 650; }
 
 .onboarding { display: grid; gap: 10px; }
 .onboarding__step {
@@ -42,6 +81,10 @@
 .recent-row:first-child { border-top: 0; }
 .recent-row__value { font-variant-numeric: tabular-nums; font-weight: 650; }
 
-@media (max-width: 1024px) {
-  .dashboard-main-grid, .dashboard-secondary-grid { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1240px) { .bias-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1024px) { .bias-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .bias-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .signal-row { grid-template-columns: 16px minmax(0, 1fr) auto; row-gap: 4px; }
+  .signal-row > :nth-child(3) { grid-column: 2 / -1; }
 }

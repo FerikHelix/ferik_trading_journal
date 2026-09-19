@@ -106,10 +106,14 @@ with no `allow-same-origin`, so it sits in an opaque origin and cannot reach the
 IndexedDB holding the trading journal. Keep it that way. The frame is a real
 file rather than `srcdoc` because the endpoint 403s without a `Referer`.
 
-Some ISPs blackhole that host, so `providers/dukascopy.ts` has a circuit
-breaker persisted in `sessionStorage`. Without persistence a multi-page app
-pays the timeout again on every navigation; with it, the cost is one ~6s wait
-per session instead of one per page.
+`providers/dukascopy.ts` has a circuit breaker persisted in `sessionStorage`.
+It exists because an unreachable host hangs until it times out, and this is a
+multi-page app — without persistence the timeout is paid again on every
+navigation. It takes two consecutive network failures to trip, because a single
+hiccup must not disable the only source of silver, oil and the forex majors.
+
+Known gap: Dukascopy lists GBPUSD but returns no candles for it, so it is kept
+out of the default watchlist.
 
 Prices use `number`, unlike account money which is `DecimalString`. See the note
 at the top of `src/lib/market/types.ts` before changing that.

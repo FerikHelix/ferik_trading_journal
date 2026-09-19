@@ -19,30 +19,70 @@ const STATUS_TONE: Record<OrderBlockStatus, 'profit' | 'loss' | 'warning' | 'inf
   invalid: 'loss',
 };
 
-function BlockRow({ block, digits, price }: { block: OrderBlock; digits: number; price: number }) {
-  const direction = block.direction === 'bullish' ? 'bull' : 'bear';
+/** Zones price can still react to. Mitigated and invalidated ones are history. */
+function liveBlocks(scan: InstrumentScan): OrderBlock[] {
+  return scan.blocks.filter((block) =>
+    block.status === 'fresh' || block.status === 'approaching' || block.status === 'touched');
+}
+
+/**
+ * The one zone worth naming on a single line: whatever price is in, else
+ * whatever it is closest to.
+ */
+function headlineBlock(scan: InstrumentScan): OrderBlock | undefined {
+  const live = liveBlocks(scan);
+  const touched = live.find((block) => block.status === 'touched');
+  if (touched) return touched;
+  return [...live].sort((a, b) => Math.abs(a.distancePct) - Math.abs(b.distancePct))[0];
+}
+
+function isAlerting(scan: InstrumentScan): boolean {
+  return scan.blocks.some((block) => block.status === 'touched' || block.status === 'approaching');
+}
+
+function zoneLabel(block: OrderBlock, digits: number): string {
+  return `${block.bottom.toFixed(digits)} – ${block.top.toFixed(digits)}`;
+}
+
+function ZoneSummary({ scan }: { scan: InstrumentScan }) {
+  const block = headlineBlock(scan);
+  const digits = scan.instrument.digits;
+
+  if (!block) {
+    return <span className="zone-summary muted">Tidak ada zona aktif</span>;
+  }
+
   return (
-    <div className={`signal-card signal-card--${direction}`}>
-      <span className="signal-card__rail" aria-hidden="true" />
-      <div className="signal-card__body">
-        <div className="signal-card__head">
-          <Icon name={block.direction === 'bullish' ? 'trending-up' : 'trending-down'} size={15} />
-          <span className="signal-card__symbol">
-            OB {block.direction === 'bullish' ? 'Bullish' : 'Bearish'}
-          </span>
-          <Badge tone={STATUS_TONE[block.status]}>{ORDER_BLOCK_STATUS_LABEL[block.status]}</Badge>
-          <Badge>{block.event.kind}</Badge>
-        </div>
-        <div className="signal-card__zone">
-          Zona {block.bottom.toFixed(digits)} – {block.top.toFixed(digits)} · harga {price.toFixed(digits)}
-        </div>
-        <div className="signal-card__meta">
-          Terbentuk {new Date(block.t).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
-          {block.touchedAt && ` · disentuh ${new Date(block.touchedAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}`}
-        </div>
+    <span className="zone-summary">
+      <Icon name={block.direction === 'bullish' ? 'trending-up' : 'trending-down'} size={13} />
+      <span className="zone-summary__range u-tnum">{zoneLabel(block, digits)}</span>
+      <Badge tone={STATUS_TONE[block.status]}>{ORDER_BLOCK_STATUS_LABEL[block.status]}</Badge>
+    </span>
+  );
+}
+
+function ScanChart({ scan }: { scan: InstrumentScan }) {
+  return (
+    <CandleChart
+      candles={scan.candles}
+      blocks={scan.blocks}
+      digits={scan.instrument.digits}
+      label={`${scan.instrument.label} ${scan.timeframe}`}
+    />
+  );
+}
+
+function InstrumentHead({ scan }: { scan: InstrumentScan }) {
+  return (
+    <div className="signal-head">
+      <div className="signal-head__title">
+        <strong>{scan.instrument.label}</strong>
+        <span className="muted u-xs">{scan.timeframe}</span>
+        {scan.proxied && <Badge tone="warning">Proxy</Badge>}
       </div>
-      <div className={`signal-card__distance ${block.distancePct >= 0 ? 'profit' : 'loss'}`}>
-        {block.distancePct >= 0 ? '+' : ''}{block.distancePct.toFixed(2)}%
+      <div className="signal-head__meta">
+        <span className="u-tnum">{scan.lastPrice.toFixed(scan.instrument.digits)}</span>
+        <ZoneSummary scan={scan} />
       </div>
     </div>
   );
@@ -55,6 +95,7 @@ export default function SignalsApp() {
   const [failures, setFailures] = useState<ScanFailure[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState<string[]>([]);
 
   const run = useCallback(async (tf: Timeframe, force: boolean) => {
     const current = await loadAppSettings();
@@ -62,8 +103,7 @@ export default function SignalsApp() {
     const result = await scanWatchlist(current, marketCacheIO, {
       timeframe: tf,
       force,
-      // Instruments resolve at very different speeds — a blocked source waits
-      // for a timeout while a cached one is instant — so each is shown as it
+      // Instruments resolve at very different speeds, so each is shown as it
       // lands instead of holding the whole page on a skeleton.
       onProgress: (partial) => {
         setScans(partial.scans);
@@ -73,8 +113,6 @@ export default function SignalsApp() {
     });
     setScans(result.scans);
     setFailures(result.failures);
-    // Persisting here as well as in the bell keeps the two consistent when the
-    // user changes timeframe on this page; addSignalAlerts ignores duplicates.
     await addSignalAlerts(result.alerts).catch(() => undefined);
   }, []);
 
@@ -91,6 +129,7 @@ export default function SignalsApp() {
 
   async function changeTimeframe(tf: Timeframe) {
     setTimeframe(tf);
+    setExpanded([]);
     setRefreshing(true);
     await run(tf, false).catch(() => undefined);
     setRefreshing(false);
@@ -102,19 +141,23 @@ export default function SignalsApp() {
     setRefreshing(false);
   }
 
-  const active = scans.flatMap((scan) =>
-    scan.blocks
-      .filter((block) => block.status === 'touched' || block.status === 'approaching')
-      .map((block) => ({ scan, block })));
+  function toggleRow(id: string) {
+    setExpanded((current) => (
+      current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]
+    ));
+  }
+
+  const alerting = scans.filter(isAlerting);
+  const quiet = scans.filter((scan) => !isAlerting(scan));
 
   if (loading) {
     return (
       <div className="grid">
         <Skeleton height={38} />
-        {[1, 2, 3].map((n) => (
+        {[1, 2].map((n) => (
           <div className="card" key={n}>
             <Skeleton width="40%" />
-            <div className="u-mt-4"><Skeleton height={54} /></div>
+            <div className="u-mt-4"><Skeleton height={180} /></div>
           </div>
         ))}
       </div>
@@ -136,36 +179,61 @@ export default function SignalsApp() {
         </button>
       </div>
 
-      <Notice tone="info" title="Cara order block dideteksi">
-        Struktur dihitung dari penutupan candle, bukan sumbu — jadi satu spike yang menembus level tanpa
-        close di baliknya tidak dianggap break. Order block diambil dari candle berlawanan terakhir sebelum
-        impulse yang menembus struktur (BOS/CHoCH). Status <strong>Mendekati</strong> dan{' '}
-        <strong>Menyentuh</strong> yang memunculkan alert saat kamu membuka aplikasi.
-      </Notice>
-
-      <Card
-        title="Alert aktif"
-        description="Zona yang sedang disentuh atau didekati harga sekarang."
-        badge={<Badge tone={active.length > 0 ? 'warning' : 'neutral'}>{active.length}</Badge>}
-      >
-        {active.length === 0 ? (
+      {alerting.length === 0 ? (
+        <Card title="Alert aktif" badge={<Badge>0</Badge>}>
           <EmptyState
             icon="radar"
             title="Tidak ada zona aktif"
             description="Belum ada order block yang disentuh atau didekati harga pada timeframe ini."
             compact
           />
-        ) : (
-          <div className="signal-list">
-            {active.map(({ scan, block }) => (
-              <div key={`${scan.instrument.id}-${block.id}`}>
-                <div className="u-xs muted u-mb-2">{scan.instrument.label} · {scan.timeframe}</div>
-                <BlockRow block={block} digits={scan.instrument.digits} price={scan.lastPrice} />
-              </div>
-            ))}
+        </Card>
+      ) : (
+        alerting.map((scan) => (
+          <Card key={scan.instrument.id} className="signal-alert">
+            <InstrumentHead scan={scan} />
+            {scan.proxyNote && <p className="u-xs muted u-mb-3">Sumber pengganti: {scan.proxyNote}</p>}
+            <ScanChart scan={scan} />
+          </Card>
+        ))
+      )}
+
+      {quiet.length > 0 && (
+        <Card
+          title="Watchlist"
+          description="Zona terdekat per instrumen. Klik baris untuk membuka chart-nya."
+          badge={<Badge>{quiet.length}</Badge>}
+        >
+          <div className="watch-list">
+            {quiet.map((scan) => {
+              const open = expanded.includes(scan.instrument.id);
+              return (
+                <div className="watch-row" key={scan.instrument.id}>
+                  <button
+                    type="button"
+                    className="watch-row__button"
+                    aria-expanded={open}
+                    onClick={() => toggleRow(scan.instrument.id)}
+                  >
+                    <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} />
+                    <strong className="watch-row__symbol">{scan.instrument.label}</strong>
+                    <span className="watch-row__price u-tnum">
+                      {scan.lastPrice.toFixed(scan.instrument.digits)}
+                    </span>
+                    <ZoneSummary scan={scan} />
+                  </button>
+                  {open && (
+                    <div className="watch-row__chart">
+                      {scan.proxyNote && <p className="u-xs muted u-mb-2">Sumber pengganti: {scan.proxyNote}</p>}
+                      <ScanChart scan={scan} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {failures.length > 0 && (
         <Notice tone="warning" title="Sebagian instrumen tidak bisa dimuat">
@@ -179,46 +247,6 @@ export default function SignalsApp() {
           </div>
         </Notice>
       )}
-
-      {scans.map((scan) => (
-        <Card
-          key={scan.instrument.id}
-          title={`${scan.instrument.label} · ${scan.timeframe}`}
-          description={`Harga ${scan.lastPrice.toFixed(scan.instrument.digits)} · candle terakhir ${new Date(scan.lastCandleAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}`}
-          badge={scan.proxied ? <Badge tone="warning">Proxy</Badge> : <Badge>{scan.provider}</Badge>}
-        >
-          {scan.proxyNote && <p className="u-xs muted u-mb-3">Sumber pengganti: {scan.proxyNote}</p>}
-
-          <div className="signal-chart-head">
-            <span className="signal-legend">
-              <span><span className="signal-legend__swatch signal-legend__swatch--bull" />Order block bullish</span>
-              <span><span className="signal-legend__swatch signal-legend__swatch--bear" />Order block bearish</span>
-            </span>
-          </div>
-          <CandleChart
-            candles={scan.candles}
-            blocks={scan.blocks}
-            digits={scan.instrument.digits}
-            label={`${scan.instrument.label} ${scan.timeframe}`}
-          />
-
-          <div className="u-mt-4" />
-          {scan.blocks.length === 0 ? (
-            <EmptyState icon="radar" title="Belum ada order block" compact />
-          ) : (
-            <div className="signal-list">
-              {scan.blocks.map((block) => (
-                <BlockRow
-                  key={block.id}
-                  block={block}
-                  digits={scan.instrument.digits}
-                  price={scan.lastPrice}
-                />
-              ))}
-            </div>
-          )}
-        </Card>
-      ))}
 
       {scans.length === 0 && failures.length === 0 && (
         <EmptyState

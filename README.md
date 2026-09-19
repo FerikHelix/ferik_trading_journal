@@ -56,9 +56,11 @@ Hal yang perlu diketahui:
   mengirim header CORS, jadi dibaca lewat JSONP — artinya menjalankan JavaScript pihak ketiga.
   Skrip itu dijalankan di dalam `<iframe sandbox="allow-scripts">` beropini origin opaque, jadi ia
   tidak bisa menyentuh IndexedDB berisi jurnal trading. Lihat `public/dukascopy-frame.html`.
-- **Sebagian ISP di Indonesia memblokir host itu.** Kalau terblokir, BTC dan emas tetap jalan lewat
-  Binance/Gate.io; perak, minyak, dan forex kosong sampai kamu pakai VPN atau DNS alternatif.
-  Ada circuit breaker supaya biayanya hanya satu kali tunggu ±6 detik per sesi, bukan per halaman.
+- **GBPUSD tidak mengembalikan data** dari Dukascopy walau instrumennya terdaftar, jadi ia
+  dikeluarkan dari watchlist default. Masih bisa dicentang manual di Settings.
+- Kalau Dukascopy sedang tidak bisa dihubungi, BTC dan emas tetap jalan lewat Binance/Gate.io dan
+  perak lewat CoinGecko. Ada circuit breaker supaya timeout-nya tidak dibayar ulang di tiap halaman;
+  ia baru aktif setelah dua kegagalan berturut-turut.
 - **Tidak ada feed berita.** Semua RSS keuangan dan API berita tidak mengirim CORS, jadi bias di
   halaman Fundamental dihitung murni dari price action: tren (MA20 vs MA50) 40%, struktur pasar
   (BOS/CHoCH) 35%, momentum 25%.
@@ -77,8 +79,13 @@ Order block dideteksi otomatis dari candle, bukan diinput manual:
 
 Status `approaching` dan `touched` memunculkan alert di lonceng topbar, dan menjadi notifikasi browser bila diizinkan di Settings. Karena ini situs statis tanpa service worker, notifikasi hanya bisa muncul saat tab terbuka.
 
-Zona order block juga digambar langsung di chart candlestick halaman Signals (lightweight-charts),
-hijau untuk bullish dan merah untuk bearish, dan diredupkan kalau sudah mitigated atau invalid.
+Halaman Signals tidak melistkan semua order block. Instrumen yang sedang punya zona aktif tampil
+langsung sebagai chart candlestick dengan zonanya tergambar (hijau bullish, merah bearish);
+selebihnya jadi satu baris ringkas berisi rentang zona terdekat dan statusnya, dan chart-nya baru
+dibuat saat baris itu diklik. Zona yang sudah mitigated atau invalid tidak digambar sama sekali.
+
+Halaman Overview menampilkan bias H4 per instrumen dan sinyal yang sedang aktif di bagian atas,
+dengan ringkasan jurnal di bawahnya.
 
 Logikanya murni fungsi dari array candle, jadi bisa diuji tanpa jaringan — lihat `tests/unit/smc.test.ts`.
 

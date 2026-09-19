@@ -56,7 +56,14 @@ function toAlert(instrument: Instrument, timeframe: Timeframe, block: OrderBlock
   };
 }
 
-export const DEFAULT_WATCHLIST = ['XAUUSD', 'BTCUSD', 'EURUSD', 'GBPUSD'];
+/**
+ * GBPUSD is deliberately absent: it is the one instrument Dukascopy answers
+ * without data. Everything else here loads. It stays selectable in Settings.
+ */
+export const DEFAULT_WATCHLIST = [
+  'XAUUSD', 'XAGUSD', 'WTIUSD', 'BTCUSD',
+  'EURUSD', 'USDJPY', 'AUDUSD', 'USDCAD',
+];
 
 export function resolveWatchlist(settings: AppSettings): string[] {
   const list = settings.watchlist?.length ? settings.watchlist : DEFAULT_WATCHLIST;
@@ -105,7 +112,7 @@ export async function scanWatchlist(
       });
       if (result.candles.length === 0) continue;
 
-      const blocks = detectOrderBlocks(result.candles);
+      const blocks = detectOrderBlocks(result.candles, { maxBlocks: 4 });
       const last = result.candles[result.candles.length - 1];
 
       scans.push({

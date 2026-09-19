@@ -33,24 +33,27 @@ export const TIMEFRAME_MS: Record<Timeframe, number> = {
  * The shape of the problem, all verified against live responses:
  *
  *  - **Dukascopy** is the only free source carrying real silver, crude oil and
- *    every forex major. It has no CORS, so it is read over JSONP inside a
- *    sandboxed iframe. It is also blocked by some Indonesian ISPs, which is
- *    exactly why every instrument below still lists a fallback where one
- *    exists.
+ *    every forex major, and it works from the browser. It has no CORS, so it
+ *    is read over JSONP inside a sandboxed iframe. Fallbacks are listed where
+ *    one exists because it is an undocumented widget backend with no uptime
+ *    promise, not because it is normally unreachable.
  *  - **Binance / Gate.io** are keyless and CORS-open but carry only crypto.
  *    PAXG and XAUT are tokenised gold and track spot closely enough for
  *    structure, though they trade through the weekend when real gold does not.
  *  - **CoinGecko** is a last resort: it is the only keyless route to anything
  *    like silver (tokenised KAG), at 4h granularity with a ~0.5% tracking
  *    error and a harsh rate limit.
- *  - There is no fallback at all for crude oil. If Dukascopy is unreachable,
- *    the UI says so rather than showing a wrong number.
+ *  - There is no fallback at all for crude oil, and GBPUSD returns no candles
+ *    even though Dukascopy lists it. In both cases the UI says so rather than
+ *    showing a wrong number.
  */
 export const PROVIDER_MAP: Record<string, ProviderCapability[]> = {
   EURUSD: [
     { provider: 'dukascopy', symbol: 'EUR/USD' },
     { provider: 'binance', symbol: 'EURUSDT', proxied: true, proxyNote: 'EURUSDT di Binance (basis USDT, ~20 pip dari spot)' },
   ],
+  // Known gap: Dukascopy lists this instrument but answers with no candles,
+  // so GBPUSD is kept out of the default watchlist.
   GBPUSD: [{ provider: 'dukascopy', symbol: 'GBP/USD' }],
   USDJPY: [{ provider: 'dukascopy', symbol: 'USD/JPY' }],
   USDCHF: [{ provider: 'dukascopy', symbol: 'USD/CHF' }],
