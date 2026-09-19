@@ -219,4 +219,3 @@ export function calculateAnalytics(
   };
 }
 
-export { cumulativeChart, outcomeChart, performanceBarChart } from './charts';

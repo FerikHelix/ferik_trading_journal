@@ -1,0 +1,50 @@
+.review-page { gap: 18px; }
+.review-controls { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
+.review-controls h2 { margin: 0; }
+.review-controls .muted { margin: 4px 0 0; font-size: 12px; }
+.review-actions { display: flex; align-items: end; gap: 10px; }
+.review-actions .field { min-width: 200px; }
+.review-week-nav { display: flex; align-items: center; gap: 6px; }
+.review-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.review-kpis .card { padding: 15px; }
+.review-kpis .stat-value { font-size: clamp(18px, 1.8vw, 24px); }
+.review-summary-grid,
+.review-spotlight-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.review-insight-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.review-insight .card-head { margin-bottom: 12px; }
+.review-insight .muted,
+.review-spotlight .muted { margin: 0; font-size: 12px; line-height: 1.5; }
+.review-value-list { display: grid; gap: 8px; }
+.review-value-list > div { display: flex; justify-content: space-between; gap: 10px; color: var(--text-secondary); font-size: 12px; }
+.review-value-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-value-list strong { color: var(--text-primary); }
+.review-missing-list { display: grid; }
+.review-missing-list a {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.review-missing-list a:first-child { border-top: 0; }
+.review-missing-list a:hover strong,
+.review-missing-list a:hover span:last-child { color: var(--brand); }
+.review-missing-list strong { color: var(--text-primary); }
+.review-missing-list span:last-child { color: var(--brand); font-size: 11px; font-weight: 650; }
+.review-trade-value { display: block; margin-bottom: 8px; font-size: 25px; font-variant-numeric: tabular-nums; }
+.review-spotlight .btn { margin-top: 14px; }
+.review-reflection textarea { min-height: 124px; }
+
+@media (max-width: 1240px) { .review-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1024px) {
+  .review-insight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .review-summary-grid, .review-spotlight-grid { grid-template-columns: minmax(0, 1fr); }
+  .review-controls { flex-direction: column; align-items: stretch; }
+}
+@media (max-width: 700px) {
+  .review-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .review-insight-grid { grid-template-columns: minmax(0, 1fr); }
+}

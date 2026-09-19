@@ -1,5 +1,5 @@
 import type { Account, AppSettings, Journal, Position, Deal, ParsedImport, WeeklyReview } from '../lib/domain/types';
-import { db, clearAllData, createAccount, getAccounts, getAppSettings, getJournals, getPositions, getPositionWithDeals, getWeeklyReview, importParsedData, updateThemePreference, upsertJournal, upsertWeeklyReview, type ImportCommitResult } from '../lib/db';
+import { db, addSignalAlerts, clearAllData, clearMarketCache, createAccount, getAccounts, getAppSettings, getCachedCandles, getCachedNews, getJournals, getPositions, getPositionWithDeals, getSignalAlerts, getWeeklyReview, importParsedData, markAlertsSeen, putCachedCandles, putCachedNews, updateMarketSettings, updateThemePreference, upsertJournal, upsertWeeklyReview, type ImportCommitResult } from '../lib/db';
 import { parseExnessCsv } from '../lib/import';
 import type { BackupSnapshot } from '../lib/backup';
 
@@ -55,7 +55,11 @@ export async function commitCsv(parsed: ParsedImport, account: Account, fileName
 
 export async function loadSnapshot(): Promise<BackupSnapshot> {
   const [accounts, importBatches, deals, positions, journals, weeklyReviews, balanceEvents, settings] = await Promise.all([db.accounts.toArray(), db.importBatches.toArray(), db.deals.toArray(), db.positions.toArray(), db.journals.toArray(), db.weeklyReviews.toArray(), db.balanceEvents.toArray(), db.settings.toArray()]);
-  return { schemaVersion: 1, exportedAt: new Date().toISOString(), accounts, importBatches, deals, positions, journals, weeklyReviews, balanceEvents, settings };
+  // Credentials never leave the device inside a backup file: a plain
+  // .ftj.json is readable by anything, and the encrypted variant is only as
+  // safe as the passphrase the user picked. They are cheap to re-enter.
+  const safeSettings = settings.map(({ twelveDataKey, alphaVantageKey, ...rest }) => rest);
+  return { schemaVersion: 1, exportedAt: new Date().toISOString(), accounts, importBatches, deals, positions, journals, weeklyReviews, balanceEvents, settings: safeSettings };
 }
 
 export async function restoreSnapshot(snapshot: BackupSnapshot, mode: 'merge' | 'replace'): Promise<void> {
@@ -68,3 +72,17 @@ export async function restoreSnapshot(snapshot: BackupSnapshot, mode: 'merge' | 
 export async function clearLocalData(): Promise<void> {
   return clearAllData();
 }
+
+/* ------------------------------------------------------------------ market */
+
+export {
+  addSignalAlerts,
+  clearMarketCache,
+  getCachedCandles,
+  getCachedNews,
+  getSignalAlerts,
+  markAlertsSeen,
+  putCachedCandles,
+  putCachedNews,
+  updateMarketSettings,
+};

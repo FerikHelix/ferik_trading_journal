@@ -1,0 +1,73 @@
+.analytics-page { gap: 18px; }
+.analytics-filters { padding: 16px 18px; }
+.analytics-filter-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.analytics-filter-heading h2 { margin: 0; }
+.analytics-filter-controls {
+  display: grid;
+  /* Capped so a lone Periode select does not stretch the full card width
+     when the custom-range inputs are hidden. */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 230px));
+  gap: 12px;
+  align-items: end;
+}
+.analytics-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.analytics-kpis .card { padding: 15px; }
+.analytics-kpis .stat-value { font-size: clamp(19px, 1.9vw, 25px); }
+.analytics-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, .8fr);
+  gap: 16px;
+}
+.analytics-secondary-metrics .metric-row { font-variant-numeric: tabular-nums; }
+.analytics-supporting-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.analytics-breakdowns { padding-top: 6px; }
+.analytics-breakdowns > .card-head { align-items: end; margin-bottom: 12px; }
+.analytics-breakdowns > .card-head h2 { margin: 0; }
+.analytics-breakdowns > .card-head p { max-width: 340px; text-align: right; }
+.analytics-breakdown-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.breakdown-card { padding: 0; overflow: hidden; }
+.breakdown-card .card-head { padding: 15px 18px 0; margin-bottom: 12px; }
+.breakdown-table { display: grid; font-size: 12px; }
+.breakdown-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) .55fr .8fr 1fr;
+  gap: 8px;
+  align-items: center;
+  min-height: 37px;
+  padding: 0 18px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.breakdown-row:hover:not(.breakdown-header) { background: var(--table-hover); }
+.breakdown-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.breakdown-row span:not(:first-child) { text-align: right; }
+.breakdown-header {
+  min-height: 30px;
+  color: var(--text-tertiary);
+  background: var(--table-header);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1240px) {
+  .analytics-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1024px) {
+  .analytics-filter-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analytics-main-grid,
+  .analytics-supporting-grid,
+  .analytics-breakdown-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .analytics-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analytics-filter-controls { grid-template-columns: minmax(0, 1fr); }
+  .analytics-breakdowns > .card-head p { text-align: left; }
+}

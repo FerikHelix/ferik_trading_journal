@@ -1,0 +1,156 @@
+.app-shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+}
+
+/* Sticky (not fixed) so the sidebar scrolls independently once the nav grows
+   past the viewport — it now holds 9 items across 4 groups. */
+.sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow-y: auto;
+  padding: 14px 12px 12px;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar-bg);
+}
+
+.sidebar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 16px;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand__mark {
+  display: grid;
+  width: 30px; height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--on-brand);
+  background: var(--brand-solid);
+  font-size: 15px;
+  font-weight: 800;
+}
+.brand__name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  white-space: nowrap;
+}
+.brand__accent { color: var(--brand); }
+
+.sidebar__foot { margin-top: auto; padding: 12px 8px 4px; }
+.privacy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.app-shell__backdrop { display: none; }
+
+.app-main { min-width: 0; display: flex; flex-direction: column; }
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--topbar-h);
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--topbar-bg);
+}
+.topbar__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+.breadcrumb { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.breadcrumb__crumb { color: var(--text-tertiary); font-size: 13px; }
+.breadcrumb__sep { color: var(--text-tertiary); }
+.breadcrumb__current {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.content {
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: 24px 24px 64px;
+}
+
+/* Specificity matters here: .icon-btn sets `display: grid` and lives in a file
+   imported after this one, so a bare `.topbar__menu { display: none }` would
+   lose the cascade and leak the mobile controls onto desktop. */
+.topbar .topbar__menu,
+.sidebar .sidebar__close,
+.app-shell .mobile-nav { display: none; }
+
+@media (max-width: 1024px) {
+  .app-shell { grid-template-columns: minmax(0, 1fr); }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: min(84vw, var(--sidebar-w));
+    transform: translateX(-100%);
+    transition: transform .24s var(--ease);
+  }
+  .app-shell[data-nav-open='true'] .sidebar { transform: none; }
+
+  .app-shell__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: block;
+    background: var(--scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .24s var(--ease);
+  }
+  .app-shell[data-nav-open='true'] .app-shell__backdrop { opacity: 1; pointer-events: auto; }
+
+  .topbar { padding: 0 16px; }
+  .topbar .topbar__menu,
+  .sidebar .sidebar__close { display: grid; }
+  .content { padding: 20px 16px calc(84px + env(safe-area-inset-bottom)); }
+
+  /* Column count comes from the nav data, so it can never drift out of sync
+     with the number of items again. */
+  .app-shell .mobile-nav {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 25;
+    display: grid;
+    grid-template-columns: repeat(var(--mobile-nav-count, 5), 1fr);
+    padding-bottom: env(safe-area-inset-bottom);
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .mobile-nav__link {
+    display: grid;
+    gap: 3px;
+    justify-items: center;
+    padding: 9px 4px 10px;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .mobile-nav__link.is-active { color: var(--brand); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .app-shell__backdrop { transition: none; }
+}

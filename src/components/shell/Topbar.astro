@@ -1,0 +1,30 @@
+---
+import Icon from '../ui/Icon.astro';
+import ThemeToggle from '../ThemeToggle';
+import AccountSwitcher from '../AccountSwitcher';
+import AlertBell from '../AlertBell';
+
+interface Props { groupLabel: string | null; pageLabel: string; }
+const { groupLabel, pageLabel } = Astro.props;
+---
+<header class="topbar">
+  <button class="icon-btn topbar__menu" data-nav-toggle type="button" aria-label="Buka navigasi">
+    <Icon name="menu" />
+  </button>
+
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    {groupLabel && (
+      <>
+        <span class="breadcrumb__crumb">{groupLabel}</span>
+        <Icon name="chevron-right" size={14} class="breadcrumb__sep" />
+      </>
+    )}
+    <span class="breadcrumb__current" aria-current="page">{pageLabel}</span>
+  </nav>
+
+  <div class="topbar__actions">
+    <AccountSwitcher client:load />
+    <AlertBell client:load />
+    <ThemeToggle client:load />
+  </div>
+</header>

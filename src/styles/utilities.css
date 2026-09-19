@@ -1,0 +1,34 @@
+/* Small utility layer so components stop reaching for inline style={{...}},
+   which cannot be themed and cannot respond to breakpoints. */
+.u-stack { display: grid; gap: var(--space, 16px); }
+.u-row { display: flex; align-items: center; gap: 10px; }
+.u-row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.u-wrap { flex-wrap: wrap; }
+.u-grow { flex: 1 1 auto; min-width: 0; }
+.u-right { margin-left: auto; }
+.u-mt-0 { margin-top: 0; }
+.u-mt-2 { margin-top: 8px; }
+.u-mt-3 { margin-top: 12px; }
+.u-mt-4 { margin-top: 16px; }
+.u-mb-0 { margin-bottom: 0; }
+.u-mb-2 { margin-bottom: 8px; }
+.u-mb-3 { margin-bottom: 12px; }
+.u-mb-4 { margin-bottom: 16px; }
+.u-gap-2 { gap: 8px; }
+.u-gap-4 { gap: 16px; }
+.u-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.u-tnum { font-variant-numeric: tabular-nums; }
+.u-mono { font-family: var(--font-mono); }
+.u-sm { font-size: 12px; }
+.u-xs { font-size: 11px; }
+.u-center { text-align: center; }
+.u-text-right { text-align: right; }
+.u-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 700px) { .u-hide-sm { display: none !important; } }

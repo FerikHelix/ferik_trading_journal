@@ -1,0 +1,47 @@
+---
+import Icon from '../ui/Icon.astro';
+import { NAV_GROUPS, navHref } from '../../lib/nav';
+
+interface Props { active: string; base: string; }
+const { active, base } = Astro.props;
+---
+<aside class="sidebar" aria-label="Navigasi utama">
+  <div class="sidebar__head">
+    <a class="brand" href={navHref(base, '')}>
+      <span class="brand__mark" aria-hidden="true">F</span>
+      <span class="brand__name">Ferik<span class="brand__accent">Trading</span></span>
+    </a>
+    <button class="icon-btn sidebar__close" data-nav-close type="button" aria-label="Tutup navigasi">
+      <Icon name="x" />
+    </button>
+  </div>
+
+  <nav class="nav">
+    {NAV_GROUPS.map((group) => (
+      <div class="nav__group">
+        {group.label && <p class="nav__label">{group.label}</p>}
+        <ul class="nav__list">
+          {group.items.map((item) => (
+            <li>
+              <a
+                class:list={['nav__link', { 'is-active': active === item.id }]}
+                href={navHref(base, item.path)}
+                aria-current={active === item.id ? 'page' : undefined}
+              >
+                <Icon name={item.icon} class="nav__icon" />
+                <span class="nav__text">{item.label}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))}
+  </nav>
+
+  <div class="sidebar__foot">
+    <span class="privacy">
+      <Icon name="shield-check" size={14} />
+      Data lokal &amp; privat
+    </span>
+  </div>
+</aside>

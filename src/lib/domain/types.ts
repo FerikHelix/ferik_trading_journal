@@ -121,6 +121,65 @@ export interface AppSettings {
   displayTimeZone: string;
   theme: ThemePreference;
   currencyDisplay: 'account';
+  /**
+   * Market data credentials and preferences. All optional so that settings
+   * rows written before schema v3 keep validating.
+   *
+   * The two API keys are deliberately REDACTED from exported backups
+   * (see dataClient.loadSnapshot) — a plain .ftj.json is not an appropriate
+   * place for credentials, even low-value free-tier ones.
+   */
+  twelveDataKey?: string;
+  alphaVantageKey?: string;
+  /** User-hosted CORS proxy, e.g. a Cloudflare Worker fronting Yahoo. */
+  dataProxyUrl?: string;
+  /** Instrument ids shown on Fundamental and scanned for signals. */
+  watchlist?: string[];
+  signalTimeframe?: MarketTimeframe;
+  /** Whether the browser Notification API may be used for signal alerts. */
+  desktopNotifications?: boolean;
+}
+
+/** Mirrors lib/market Timeframe without importing it (keeps domain leaf-level). */
+export type MarketTimeframe = 'M15' | 'H1' | 'H4';
+
+export interface SignalAlert {
+  id: string;
+  instrumentId: string;
+  timeframe: MarketTimeframe;
+  direction: 'bullish' | 'bearish';
+  status: 'approaching' | 'touched';
+  /** Zone bounds at the moment the alert fired. */
+  top: number;
+  bottom: number;
+  price: number;
+  createdAt: string;
+  seenAt?: string;
+}
+
+export interface CachedCandles {
+  /** `${instrumentId}:${timeframe}` */
+  id: string;
+  instrumentId: string;
+  timeframe: MarketTimeframe;
+  provider: string;
+  proxied: boolean;
+  proxyNote?: string;
+  fetchedAt: number;
+  /** Stored as [t,o,h,l,c] tuples — object-per-candle roughly triples the size. */
+  rows: number[][];
+}
+
+export interface CachedNews {
+  id: string;
+  title: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+  summary?: string;
+  sentiment?: number;
+  tags: string[];
+  fetchedAt: number;
 }
 
 export interface ImportIssue {

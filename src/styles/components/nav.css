@@ -1,0 +1,70 @@
+.nav { display: grid; gap: 14px; }
+.nav__group { display: grid; gap: 2px; }
+.nav__label {
+  margin: 4px 8px 4px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.nav__list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.nav__link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 550;
+}
+.nav__link:hover { color: var(--text-primary); background: var(--surface-hover); }
+.nav__link.is-active {
+  color: var(--brand);
+  background: var(--brand-subtle);
+  font-weight: 650;
+}
+.nav__icon { color: currentcolor; opacity: .95; }
+.nav__text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.icon-btn {
+  display: grid;
+  width: 34px; height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: transparent;
+}
+.icon-btn:hover { color: var(--text-primary); border-color: var(--border-strong); background: var(--surface-hover); }
+
+.theme-toggle { color: var(--brand); }
+.theme-toggle:hover { border-color: var(--brand); background: var(--brand-subtle); }
+
+.account-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 550;
+}
+.account-pill:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.account-pill select {
+  min-height: 0; height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 550;
+}
+.account-pill select:focus { box-shadow: none; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--profit); }

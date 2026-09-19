@@ -1,0 +1,23 @@
+---
+import Icon from '../ui/Icon.astro';
+import { MOBILE_NAV_ITEMS, navHref } from '../../lib/nav';
+
+interface Props { active: string; base: string; }
+const { active, base } = Astro.props;
+---
+<nav
+  class="mobile-nav"
+  aria-label="Navigasi cepat"
+  style={`--mobile-nav-count:${MOBILE_NAV_ITEMS.length}`}
+>
+  {MOBILE_NAV_ITEMS.map((item) => (
+    <a
+      class:list={['mobile-nav__link', { 'is-active': active === item.id }]}
+      href={navHref(base, item.path)}
+      aria-current={active === item.id ? 'page' : undefined}
+    >
+      <Icon name={item.icon} size={19} />
+      <span>{item.label}</span>
+    </a>
+  ))}
+</nav>

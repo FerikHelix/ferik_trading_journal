@@ -1,0 +1,173 @@
+/* ==========================================================================
+   FerikTrading — design tokens
+   --------------------------------------------------------------------------
+   Two rules that this file exists to enforce:
+
+   1. `--brand` is for text/icons (needs >= 4.5:1 on surface) while
+      `--brand-solid` is a button FILL (needs >= 4.5:1 against its own label).
+      One value cannot satisfy both, which is why they are separate.
+
+   2. `--profit`/`--loss` are TEXT colours (4.5:1) and `--chart-bull`/
+      `--chart-bear` are graphic marks (3:1). They were previously the same
+      value in both themes, which made light-mode charts nearly invisible
+      (#22C783 on white is 1.9:1). Never collapse them again.
+
+   Chart tokens must stay plain hex or 8-digit hex. ChartPanel reads them via
+   getComputedStyle and hands the raw string to canvas, which cannot parse
+   color-mix(). Using color-mix() in a --chart-* token silently breaks charts.
+   ========================================================================== */
+
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* surfaces — navy-tinted ramp so the blue reads as intentional */
+  --background: #0B1220;
+  --surface: #121A2A;
+  --surface-secondary: #182234;
+  --surface-hover: #1E2A3E;
+  --surface-sunken: #0E1524;
+  --border: #2A3A54;
+  --border-strong: #3A4D6B;
+
+  /* text */
+  --text-primary: #E6EDF7;
+  --text-secondary: #9AA8BD;
+  --text-tertiary: #8497B2;
+  --text-inverse: #0B1220;
+
+  /* brand */
+  --brand: #60A5FA;
+  --brand-hover: #93C5FD;
+  --brand-solid: #2563EB;
+  --brand-solid-hover: #3B82F6;
+  --brand-subtle: #60A5FA1F;
+  --on-brand: #FFFFFF;
+  --focus-ring: #60A5FA;
+
+  /* semantic, text-safe */
+  --profit: #34D399;
+  --profit-background: #0F2A22;
+  --loss: #F87171;
+  --loss-background: #2C1618;
+  --warning: #FBBF24;
+  --warning-background: #2C2110;
+  --info: #38BDF8;
+  --info-background: #0D2735;
+  --neutral-background: #1C2740;
+
+  /* trade direction — deliberately NOT profit/loss */
+  --long: #60A5FA;
+  --long-background: #14243D;
+  --short: #C084FC;
+  --short-background: #261A3B;
+
+  /* charts — graphic marks, hex only */
+  --chart-bull: #34D399;
+  --chart-bear: #F87171;
+  --chart-line: #60A5FA;
+  --chart-line-fill: #60A5FA33;
+  --chart-line-fade: #60A5FA00;
+  --chart-grid: #1E2A3D;
+  --chart-axis: #2A3A54;
+  --chart-neutral: #8497B2;
+  --chart-1: #60A5FA;
+  --chart-2: #34D399;
+  --chart-3: #FBBF24;
+  --chart-4: #F87171;
+  --chart-5: #C084FC;
+  --chart-6: #38BDF8;
+
+  /* components */
+  --table-header: #0E1524;
+  --table-hover: #FFFFFF08;
+  --skeleton-base: #182234;
+  --skeleton-highlight: #22304A;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
+  --shadow: 0 1px 3px rgb(0 0 0 / 34%), 0 8px 24px rgb(0 0 0 / 22%);
+  --shadow-lg: 0 16px 48px rgb(0 0 0 / 40%);
+  --sidebar-bg: #0E1626;
+  --topbar-bg: #0E1626;
+  --scrim: rgb(2 6 16 / 62%);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  --background: #F5F7FA;
+  --surface: #FFFFFF;
+  --surface-secondary: #F1F4F8;
+  --surface-hover: #E8EDF4;
+  --surface-sunken: #F1F4F8;
+  --border: #E2E8F0;
+  --border-strong: #CBD5E1;
+
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #64748B;
+  --text-inverse: #FFFFFF;
+
+  --brand: #2563EB;
+  --brand-hover: #1D4ED8;
+  --brand-solid: #2563EB;
+  --brand-solid-hover: #1D4ED8;
+  --brand-subtle: #EFF6FF;
+  --on-brand: #FFFFFF;
+  --focus-ring: #2563EB;
+
+  --profit: #047857;
+  --profit-background: #ECFDF5;
+  --loss: #B91C1C;
+  --loss-background: #FEF2F2;
+  --warning: #B45309;
+  --warning-background: #FFFBEB;
+  --info: #0E7490;
+  --info-background: #ECFEFF;
+  --neutral-background: #F1F4F8;
+
+  --long: #1D4ED8;
+  --long-background: #EFF6FF;
+  --short: #7E22CE;
+  --short-background: #FAF5FF;
+
+  /* the light-mode contrast fix: deep enough to read on white */
+  --chart-bull: #059669;
+  --chart-bear: #DC2626;
+  --chart-line: #2563EB;
+  --chart-line-fill: #2563EB1F;
+  --chart-line-fade: #2563EB00;
+  --chart-grid: #E6EBF2;
+  --chart-axis: #CBD5E1;
+  --chart-neutral: #64748B;
+  --chart-1: #2563EB;
+  --chart-2: #059669;
+  --chart-3: #B45309;
+  --chart-4: #DC2626;
+  --chart-5: #7E22CE;
+  --chart-6: #0E7490;
+
+  --table-header: #F1F4F8;
+  --table-hover: #F8FAFC;
+  --skeleton-base: #EEF2F7;
+  --skeleton-highlight: #FFFFFF;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 5%);
+  --shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 4px 12px rgb(15 23 42 / 5%);
+  --shadow-lg: 0 12px 32px rgb(15 23 42 / 10%);
+  --sidebar-bg: #FFFFFF;
+  --topbar-bg: #FFFFFF;
+  --scrim: rgb(15 23 42 / 45%);
+}
+
+/* scale tokens — identical in both themes */
+:root {
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+  --sidebar-w: 248px;
+  --topbar-h: 60px;
+  --content-max: 1440px;
+  --ease: cubic-bezier(.32, .72, 0, 1);
+}

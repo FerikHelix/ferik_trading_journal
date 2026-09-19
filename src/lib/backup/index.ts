@@ -41,7 +41,21 @@ const positionSchema = z.object({ id: z.string(), accountId: z.string(), positio
 const journalSchema = z.object({ id: z.string(), positionId: z.string(), strategy: z.string(), setup: z.string(), thesis: z.string(), emotion: z.string(), mistakes: z.array(z.string()), tags: z.array(z.string()), executionRating: z.number().min(1).max(5).optional(), riskAmount: decimalString.optional(), plannedRiskReward: decimalString.optional(), review: z.string(), createdAt: isoString, updatedAt: isoString });
 const weeklyReviewSchema = z.object({ id: z.string(), accountId: z.string(), weekStart: isoString, weekEnd: isoString, wentWell: z.string(), toImprove: z.string(), lesson: z.string(), nextWeekFocus: z.string(), createdAt: isoString, updatedAt: isoString });
 const balanceEventSchema = z.object({ id: z.string(), accountId: z.string(), ticketId: z.string(), type: z.enum(['deposit', 'withdrawal', 'credit', 'other']), amount: decimalString, occurredAt: isoString, comment: z.string() });
-const settingsSchema = z.object({ id: z.literal('app'), schemaVersion: z.number().int().positive(), displayTimeZone: z.string(), theme: z.enum(['light', 'dark', 'system']), currencyDisplay: z.literal('account') });
+// z.object() strips unknown keys rather than rejecting them, so every field
+// that must survive a backup round trip has to be listed here. The two API
+// keys are intentionally absent: dataClient.loadSnapshot redacts them before
+// export, and anything still present in an old file is dropped on restore.
+const settingsSchema = z.object({
+  id: z.literal('app'),
+  schemaVersion: z.number().int().positive(),
+  displayTimeZone: z.string(),
+  theme: z.enum(['light', 'dark', 'system']),
+  currencyDisplay: z.literal('account'),
+  dataProxyUrl: z.string().optional(),
+  watchlist: z.array(z.string()).optional(),
+  signalTimeframe: z.enum(['M15', 'H1', 'H4']).optional(),
+  desktopNotifications: z.boolean().optional(),
+});
 
 const snapshotSchema = z.object({
   schemaVersion: z.literal(BACKUP_SCHEMA_VERSION),

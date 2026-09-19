@@ -1,0 +1,44 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  background: var(--neutral-background);
+  font-size: 10.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.badge.profit, .badge--profit { color: var(--profit); background: var(--profit-background); }
+.badge.loss, .badge--loss { color: var(--loss); background: var(--loss-background); }
+.badge--warning { color: var(--warning); background: var(--warning-background); }
+.badge--info { color: var(--info); background: var(--info-background); }
+.badge--brand { color: var(--brand); background: var(--brand-subtle); }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.pill--soon { color: var(--warning); background: var(--warning-background); }
+
+/* Trade direction is NOT profit/loss — a losing buy must not render green. */
+.side {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.side--buy { color: var(--long); background: var(--long-background); }
+.side--sell { color: var(--short); background: var(--short-background); }
+.symbol { font-weight: 650; }

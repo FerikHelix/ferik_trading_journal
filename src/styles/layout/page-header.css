@@ -1,0 +1,23 @@
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+.page-head__text { min-width: 0; }
+.page-head__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+.grid { display: grid; gap: 16px; }
+.stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
+.two-col { grid-template-columns: minmax(0, 1.65fr) minmax(260px, .85fr); }
+.three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+@media (max-width: 1024px) {
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .two-col, .three-col { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .page-head { flex-direction: column; align-items: stretch; gap: 14px; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

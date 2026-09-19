@@ -1,61 +1,62 @@
 ---
 import '../styles/global.css';
-import ThemeToggle from '../components/ThemeToggle';
+import Sidebar from '../components/shell/Sidebar.astro';
+import Topbar from '../components/shell/Topbar.astro';
+import MobileNav from '../components/shell/MobileNav.astro';
+import { findNav } from '../lib/nav';
+import { themeBootstrap } from '../lib/theme/bootstrap';
+import { DARK_META } from '../lib/theme';
 
 interface Props { title: string; description?: string; active: string; }
-const { title, description = 'Trading journal local-first untuk evaluasi yang lebih jernih.', active } = Astro.props;
+const {
+  title,
+  description = 'FerikTrading — fundamental, sinyal SMC, dan jurnal trading dalam satu workspace lokal.',
+  active,
+} = Astro.props;
 const base = import.meta.env.BASE_URL;
-const href = (path: string) => `${base}${path.replace(/^\//, '')}`;
-const nav = [
-  ['dashboard', '', '⌁', 'Dashboard'],
-  ['trades', 'trades/', '↕', 'Trades'],
-  ['import', 'import/', '⇧', 'Import'],
-  ['analytics', 'analytics/', '⌗', 'Analytics'],
-  ['journal', 'journal/', '✎', 'Journal'],
-  ['settings', 'settings/', '⚙', 'Settings'],
-  ['review', 'review/', 'R', 'Review'],
-];
+const crumb = findNav(active);
 ---
 <!doctype html>
 <html lang="id" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
-    <meta name="theme-color" content="#0B0F14" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content={DARK_META} />
     <meta name="description" content={description} />
-    <title>{title} · Ferik Journal</title>
-    <script is:inline>
-      (() => {
-        const key = 'ferik-journal-theme';
-        const saved = localStorage.getItem(key);
-        const preference = saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
-        const theme = preference === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : preference;
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
-        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0B0F14' : '#F6F8FA');
-      })();
-    </script>
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <title>{title} · FerikTrading</title>
+    <script is:inline set:html={themeBootstrap()} />
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar" aria-label="Navigasi utama">
-        <a class="brand" href={href('')}><span class="brand-mark">F</span><span>Ferik Journal</span></a>
-        <p class="nav-label">Workspace</p>
-        <nav class="nav-list">
-          {nav.map(([id, path, icon, label]) => <a class:list={['nav-link', { active: active === id }]} href={href(path)} aria-current={active === id ? 'page' : undefined}><span class="nav-icon">{icon}</span>{label}</a>)}
-        </nav>
-        <div class="privacy-note"><strong>● Local & private</strong>Data tersimpan hanya di browser perangkat ini.</div>
-      </aside>
-      <main class="main">
-        <header class="topbar">
-          <span class="topbar-title">Trading workspace</span>
-          <div class="topbar-actions"><span class="account-pill"><span class="status-dot"></span> Penyimpanan lokal</span><ThemeToggle client:load /></div>
-        </header>
-        <div class="content"><slot /></div>
-      </main>
-      <nav class="mobile-nav" aria-label="Navigasi mobile">
-        {nav.map(([id, path, icon, label]) => <a class:list={['nav-link', { active: active === id }]} href={href(path)} aria-current={active === id ? 'page' : undefined}><span class="nav-icon">{icon}</span>{label}</a>)}
-      </nav>
+    <a class="skip-link" href="#konten">Lewati ke konten</a>
+    <div class="app-shell" data-nav-open="false">
+      <Sidebar active={active} base={base} />
+      <div class="app-shell__backdrop" data-nav-close aria-hidden="true"></div>
+      <div class="app-main">
+        <Topbar groupLabel={crumb?.group.label ?? null} pageLabel={crumb?.item.title ?? title} />
+        <main class="content" id="konten"><slot /></main>
+      </div>
+      <MobileNav active={active} base={base} />
     </div>
+    <script is:inline>
+      (() => {
+        const shell = document.querySelector('.app-shell');
+        if (!shell) return;
+        const set = (open) => {
+          shell.dataset.navOpen = String(open);
+          document.body.style.overflow = open ? 'hidden' : '';
+        };
+        document.querySelector('[data-nav-toggle]')?.addEventListener('click', () => {
+          set(shell.dataset.navOpen !== 'true');
+        });
+        document.querySelectorAll('[data-nav-close]').forEach((el) => {
+          el.addEventListener('click', () => set(false));
+        });
+        document.querySelectorAll('.sidebar .nav__link').forEach((el) => {
+          el.addEventListener('click', () => set(false));
+        });
+        addEventListener('keydown', (event) => { if (event.key === 'Escape') set(false); });
+      })();
+    </script>
   </body>
 </html>

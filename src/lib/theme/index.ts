@@ -2,6 +2,10 @@ import type { ThemePreference } from '../domain/types';
 
 export const THEME_STORAGE_KEY = 'ferik-journal-theme';
 export const THEME_EVENT = 'ferik-theme-change';
+/** <meta name="theme-color"> values. Imported by ./bootstrap so the inline
+ *  pre-paint script and this module can never disagree. */
+export const DARK_META = '#0B1220';
+export const LIGHT_META = '#FFFFFF';
 export type ResolvedTheme = Exclude<ThemePreference, 'system'>;
 
 export function isThemePreference(value: unknown): value is ThemePreference {
@@ -31,7 +35,7 @@ export function applyTheme(preference: ThemePreference, persist = true): Resolve
   if (typeof document === 'undefined') return resolved;
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.colorScheme = resolved;
-  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#0B0F14' : '#F6F8FA');
+  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? DARK_META : LIGHT_META);
   if (persist) window.localStorage.setItem(THEME_STORAGE_KEY, preference);
   window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: { preference, resolved } }));
   return resolved;

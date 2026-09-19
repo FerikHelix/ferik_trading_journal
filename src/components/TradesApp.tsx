@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Account, Journal, Position } from '../lib/domain/types';
+import { Icon, SideBadge } from './ui';
 import { loadAccounts, loadJournals, loadPositions } from './dataClient';
+import { useActiveAccount } from './useActiveAccount';
 
 const PAGE_SIZE = 12;
 
 export default function TradesApp() {
   const [rows,setRows]=useState<Position[]>([]); const [journals,setJournals]=useState<Journal[]>([]); const [accounts,setAccounts]=useState<Account[]>([]);
-  const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const [query,setQuery]=useState(''); const [side,setSide]=useState(''); const [result,setResult]=useState(''); const [account,setAccount]=useState(''); const [strategy,setStrategy]=useState(''); const [journalStatus,setJournalStatus]=useState(''); const [from,setFrom]=useState(''); const [to,setTo]=useState(''); const [sort,setSort]=useState('date-desc'); const [page,setPage]=useState(1);
+  // Account scope lives in the topbar so it survives navigation between pages.
+  const [account]=useActiveAccount();
+  const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const [query,setQuery]=useState(''); const [side,setSide]=useState(''); const [result,setResult]=useState(''); const [strategy,setStrategy]=useState(''); const [journalStatus,setJournalStatus]=useState(''); const [from,setFrom]=useState(''); const [to,setTo]=useState(''); const [sort,setSort]=useState('date-desc'); const [page,setPage]=useState(1);
   useEffect(()=>{Promise.all([loadPositions(),loadJournals(),loadAccounts()]).then(([p,j,a])=>{setRows(p);setJournals(j);setAccounts(a)}).catch(()=>setError('Data lokal tidak dapat dibuka. Muat ulang halaman dan coba lagi.')).finally(()=>setLoading(false))},[]);
   const journalByPosition=useMemo(()=>new Map(journals.map(j=>[j.positionId,j])),[journals]);
   const filtered=useMemo(()=>rows.filter(p=>{
@@ -23,7 +27,6 @@ export default function TradesApp() {
     <section className="card">
       <div className="toolbar">
         <input aria-label="Cari trade" placeholder="Cari symbol, ticket, strategy, tag…" value={query} onChange={e=>setQuery(e.target.value)}/>
-        <select aria-label="Filter account" value={account} onChange={e=>setAccount(e.target.value)}><option value="">Semua account</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select>
         <select aria-label="Filter arah" value={side} onChange={e=>setSide(e.target.value)}><option value="">Buy & sell</option><option value="buy">Buy</option><option value="sell">Sell</option></select>
         <select aria-label="Filter hasil" value={result} onChange={e=>setResult(e.target.value)}><option value="">Semua hasil</option><option value="win">Win</option><option value="loss">Loss</option><option value="be">Breakeven</option></select>
         <select aria-label="Filter strategy" value={strategy} onChange={e=>setStrategy(e.target.value)}><option value="">Semua strategy</option>{strategies.map(value=><option key={value}>{value}</option>)}</select>
@@ -31,7 +34,7 @@ export default function TradesApp() {
         <input aria-label="Tanggal mulai" type="date" value={from} onChange={e=>setFrom(e.target.value)}/><input aria-label="Tanggal akhir" type="date" value={to} onChange={e=>setTo(e.target.value)}/>
         <select aria-label="Urutkan" value={sort} onChange={e=>setSort(e.target.value)}><option value="date-desc">Terbaru</option><option value="date-asc">Terlama</option><option value="pnl-desc">P&amp;L terbesar</option><option value="pnl-asc">P&amp;L terkecil</option><option value="volume-desc">Volume terbesar</option></select>
       </div>
-      {!visible.length?<div className="empty"><div className="empty-icon">↕</div><h3>{rows.length?'Tidak ada hasil':'Belum ada trade'}</h3><p>{rows.length?'Coba ubah filter atau kata pencarian.':'Import file CSV Exness untuk mengisi daftar trade.'}</p>{!rows.length&&<a className="btn primary" href={`${import.meta.env.BASE_URL}import/`}>Import CSV</a>}</div>:<div className="table-wrap"><table><thead><tr><th>Tanggal</th><th>Symbol</th><th>Side</th><th>Volume</th><th>Net P&amp;L</th><th>Strategy</th><th>Journal</th></tr></thead><tbody>{visible.map(p=>{const j=journalByPosition.get(p.id);const pnl=Number(p.netProfit);return <tr key={p.id}><td>{new Date(p.closeAt??p.openAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})}</td><td className="symbol">{p.symbol}</td><td><span className={`side ${p.side==='buy'?'profit':'loss'}`}>{p.side}</span></td><td>{p.volume}</td><td className={pnl>=0?'profit':'loss'}>{pnl.toFixed(2)}</td><td>{j?.strategy||'—'}</td><td><a className="btn" href={`${import.meta.env.BASE_URL}journal/?positionId=${encodeURIComponent(p.id)}`}>{j?'Buka':'Isi jurnal'}</a></td></tr>})}</tbody></table></div>}
+      {!visible.length?<div className="empty"><div className="empty-icon"><Icon name="list" size={20} /></div><h3>{rows.length?'Tidak ada hasil':'Belum ada trade'}</h3><p>{rows.length?'Coba ubah filter atau kata pencarian.':'Import file CSV Exness untuk mengisi daftar trade.'}</p>{!rows.length&&<a className="btn primary" href={`${import.meta.env.BASE_URL}import/`}>Import CSV</a>}</div>:<div className="table-wrap"><table><thead><tr><th>Tanggal</th><th>Symbol</th><th>Side</th><th>Volume</th><th>Net P&amp;L</th><th>Strategy</th><th>Journal</th></tr></thead><tbody>{visible.map(p=>{const j=journalByPosition.get(p.id);const pnl=Number(p.netProfit);return <tr key={p.id}><td>{new Date(p.closeAt??p.openAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})}</td><td className="symbol">{p.symbol}</td><td><SideBadge side={p.side} /></td><td>{p.volume}</td><td className={pnl>=0?'profit':'loss'}>{pnl.toFixed(2)}</td><td>{j?.strategy||'—'}</td><td><a className="btn" href={`${import.meta.env.BASE_URL}journal/?positionId=${encodeURIComponent(p.id)}`}>{j?'Buka':'Isi jurnal'}</a></td></tr>})}</tbody></table></div>}
       <div className="pagination"><span>{filtered.length?`${(page-1)*PAGE_SIZE+1}–${Math.min(page*PAGE_SIZE,filtered.length)} dari ${filtered.length}`:'0 trade'}</span><div className="actions"><button className="btn" disabled={page<=1} onClick={()=>setPage(p=>p-1)}>←</button><button className="btn" disabled={page>=pages} onClick={()=>setPage(p=>p+1)}>→</button></div></div>
     </section>
   </>;

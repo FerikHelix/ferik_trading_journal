@@ -3,6 +3,7 @@ import ChartPanel from './ChartPanel';
 import { calculateAnalytics, type SeriesPoint } from '../lib/analytics';
 import type { Account, Journal, Position } from '../lib/domain/types';
 import { loadAccounts, loadJournals, loadPositions } from './dataClient';
+import { useActiveAccount } from './useActiveAccount';
 
 type RangePreset = '7d' | '30d' | '90d' | 'month' | 'all' | 'custom';
 
@@ -51,7 +52,8 @@ export default function AnalyticsApp() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [journals, setJournals] = useState<Journal[]>([]);
-  const [accountId, setAccountId] = useState('');
+  // Shared with every other page via the topbar switcher.
+  const [accountId] = useActiveAccount();
   const [preset, setPreset] = useState<RangePreset>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -93,7 +95,6 @@ export default function AnalyticsApp() {
     <section className="card analytics-filters" aria-label="Filter analytics">
       <div className="analytics-filter-heading"><div><span className="eyebrow">Filter performa</span><h2>{dateDescription}</h2></div><span className="badge">{metrics.totalPositions} closed position</span></div>
       <div className="analytics-filter-controls">
-        <div className="field"><label htmlFor="analytics-account">Account</label><select id="analytics-account" value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Semua account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.label} · {account.currency}</option>)}</select></div>
         <div className="field"><label htmlFor="analytics-period">Periode</label><select id="analytics-period" value={preset} onChange={(event) => selectPreset(event.target.value as RangePreset)}><option value="7d">7 hari terakhir</option><option value="30d">30 hari terakhir</option><option value="90d">90 hari terakhir</option><option value="month">Bulan ini</option><option value="all">Semua waktu</option><option value="custom">Tanggal kustom</option></select></div>
         {preset === 'custom' && <><div className="field"><label htmlFor="analytics-from">Dari</label><input id="analytics-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></div><div className="field"><label htmlFor="analytics-to">Sampai</label><input id="analytics-to" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></div></>}
       </div>
