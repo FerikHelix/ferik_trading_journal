@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { AppSettings } from '../lib/domain/types';
 import { scanWatchlist, type InstrumentScan, type ScanFailure } from '../lib/market/signals';
 import type { Timeframe } from '../lib/market/types';
 import { TIMEFRAMES } from '../lib/market/types';
 import { ORDER_BLOCK_STATUS_LABEL, type OrderBlock, type OrderBlockStatus } from '../lib/smc';
+import CandleChart from './CandleChart';
 import { Badge, Card, EmptyState, Icon, Notice, Skeleton, Tabs } from './ui';
 import { addSignalAlerts, loadAppSettings } from './dataClient';
 import { marketCacheIO } from './marketCacheIO';
@@ -58,7 +59,18 @@ export default function SignalsApp() {
   const run = useCallback(async (tf: Timeframe, force: boolean) => {
     const current = await loadAppSettings();
     setSettings(current);
-    const result = await scanWatchlist(current, marketCacheIO, { timeframe: tf, force });
+    const result = await scanWatchlist(current, marketCacheIO, {
+      timeframe: tf,
+      force,
+      // Instruments resolve at very different speeds — a blocked source waits
+      // for a timeout while a cached one is instant — so each is shown as it
+      // lands instead of holding the whole page on a skeleton.
+      onProgress: (partial) => {
+        setScans(partial.scans);
+        setFailures(partial.failures);
+        setLoading(false);
+      },
+    });
     setScans(result.scans);
     setFailures(result.failures);
     // Persisting here as well as in the bell keeps the two consistent when the
@@ -176,6 +188,21 @@ export default function SignalsApp() {
           badge={scan.proxied ? <Badge tone="warning">Proxy</Badge> : <Badge>{scan.provider}</Badge>}
         >
           {scan.proxyNote && <p className="u-xs muted u-mb-3">Sumber pengganti: {scan.proxyNote}</p>}
+
+          <div className="signal-chart-head">
+            <span className="signal-legend">
+              <span><span className="signal-legend__swatch signal-legend__swatch--bull" />Order block bullish</span>
+              <span><span className="signal-legend__swatch signal-legend__swatch--bear" />Order block bearish</span>
+            </span>
+          </div>
+          <CandleChart
+            candles={scan.candles}
+            blocks={scan.blocks}
+            digits={scan.instrument.digits}
+            label={`${scan.instrument.label} ${scan.timeframe}`}
+          />
+
+          <div className="u-mt-4" />
           {scan.blocks.length === 0 ? (
             <EmptyState icon="radar" title="Belum ada order block" compact />
           ) : (

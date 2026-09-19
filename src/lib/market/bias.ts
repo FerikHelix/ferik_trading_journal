@@ -1,5 +1,5 @@
 import { detectStructure, findSwings } from '../smc';
-import type { BiasDirection, Candle, Instrument, InstrumentBias, NewsItem } from './types';
+import type { BiasDirection, Candle, Instrument, InstrumentBias } from './types';
 
 /**
  * Directional bias per instrument.
@@ -14,7 +14,6 @@ export interface BiasInput {
   instrument: Instrument;
   /** Higher-timeframe candles, oldest first. */
   candles: Candle[];
-  news: NewsItem[];
 }
 
 function sma(values: number[], period: number): number | null {
@@ -73,36 +72,17 @@ function momentumVote(candles: Candle[]): Vote | null {
   };
 }
 
-function newsVote(instrument: Instrument, news: NewsItem[]): Vote | null {
-  const relevant = news.filter((item) => item.tags.some((tag) => instrument.drivers.includes(tag)));
-  const scored = relevant.filter((item) => typeof item.sentiment === 'number');
-  if (scored.length === 0) return null;
+/**
+ * Reweighted after the news input was removed. The three remaining signals
+ * keep their relative proportions and now sum to 1.
+ */
+const WEIGHTS = { trend: 0.4, structure: 0.35, momentum: 0.25 };
 
-  const average = scored.reduce((total, item) => total + (item.sentiment ?? 0), 0) / scored.length;
-
-  // A headline tagged with the QUOTE currency pushes the pair the other way:
-  // bullish USD news is bearish for EURUSD. drivers[0] is the base.
-  const base = instrument.drivers[0];
-  const baseWeighted = scored.reduce((total, item) => {
-    const touchesBase = item.tags.includes(base);
-    return total + (item.sentiment ?? 0) * (touchesBase ? 1 : -1);
-  }, 0) / scored.length;
-
-  const score = Math.max(-1, Math.min(1, baseWeighted * 3));
-  return {
-    score,
-    reason: `${scored.length} berita relevan, sentimen rata-rata ${average >= 0 ? '+' : ''}${average.toFixed(2)}.`,
-  };
-}
-
-const WEIGHTS = { trend: 0.35, structure: 0.3, momentum: 0.2, news: 0.15 };
-
-export function computeBias({ instrument, candles, news }: BiasInput): InstrumentBias {
+export function computeBias({ instrument, candles }: BiasInput): InstrumentBias {
   const votes: Array<[keyof typeof WEIGHTS, Vote | null]> = [
     ['trend', trendVote(candles)],
     ['structure', structureVote(candles)],
     ['momentum', momentumVote(candles)],
-    ['news', newsVote(instrument, news)],
   ];
 
   let weighted = 0;
@@ -126,7 +106,8 @@ export function computeBias({ instrument, candles, news }: BiasInput): Instrumen
     };
   }
 
-  // Renormalise by the weight actually present, so a missing news feed lowers
+  // Renormalise by the weight actually present, so a signal that could not be
+  // computed (too few candles for an MA, no confirmed structure yet) lowers
   // confidence rather than silently dragging the score toward zero.
   const normalised = weighted / totalWeight;
   const coverage = totalWeight / Object.values(WEIGHTS).reduce((a, b) => a + b, 0);

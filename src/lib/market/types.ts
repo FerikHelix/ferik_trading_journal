@@ -38,7 +38,7 @@ export interface Instrument {
   drivers: string[];
 }
 
-export type ProviderId = 'binance' | 'twelvedata' | 'proxy';
+export type ProviderId = 'dukascopy' | 'binance' | 'gateio' | 'coingecko' | 'proxy';
 
 export interface CandleRequest {
   instrument: Instrument;
@@ -53,19 +53,6 @@ export interface CandleResult {
   proxied: boolean;
   proxyNote?: string;
   fetchedAt: number;
-}
-
-export interface NewsItem {
-  id: string;
-  title: string;
-  url: string;
-  source: string;
-  publishedAt: string;
-  summary?: string;
-  /** -1..1 when the provider scores it, otherwise undefined. */
-  sentiment?: number;
-  /** Currency / instrument codes this headline was tagged with. */
-  tags: string[];
 }
 
 export type BiasDirection = 'bullish' | 'bearish' | 'neutral';
@@ -93,7 +80,6 @@ export interface ProviderCapability {
   symbol: string;
   proxied?: boolean;
   proxyNote?: string;
-  requiresKey?: boolean;
 }
 
 export class MarketDataError extends Error {

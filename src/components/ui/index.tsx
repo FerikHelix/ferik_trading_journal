@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ComponentChildren } from 'preact';
 import Icon from './Icon';
 import type { IconName } from './icons';
 
@@ -22,7 +22,7 @@ const TONE_CLASS: Record<Tone, string> = {
   brand: 'badge--brand',
 };
 
-export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
+export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ComponentChildren }) {
   return <span className={`badge ${TONE_CLASS[tone]}`.trim()}>{children}</span>;
 }
 
@@ -35,13 +35,13 @@ export function Card({
   className = '',
   children,
 }: {
-  title?: ReactNode;
-  description?: ReactNode;
-  badge?: ReactNode;
-  action?: ReactNode;
+  title?: ComponentChildren;
+  description?: ComponentChildren;
+  badge?: ComponentChildren;
+  action?: ComponentChildren;
   flush?: boolean;
   className?: string;
-  children: ReactNode;
+  children: ComponentChildren;
 }) {
   const hasHead = title || description || badge || action;
   return (
@@ -67,9 +67,9 @@ export function StatTile({
   tone,
   delta,
 }: {
-  label: ReactNode;
-  value: ReactNode;
-  foot?: ReactNode;
+  label: ComponentChildren;
+  value: ComponentChildren;
+  foot?: ComponentChildren;
   tone?: 'profit' | 'loss';
   delta?: { text: string; direction: 'up' | 'down' | 'flat' };
 }) {
@@ -102,8 +102,8 @@ export function EmptyState({
 }: {
   icon?: IconName;
   title: string;
-  description?: ReactNode;
-  action?: ReactNode;
+  description?: ComponentChildren;
+  action?: ComponentChildren;
   compact?: boolean;
 }) {
   return (
@@ -124,8 +124,8 @@ export function Notice({
   children,
 }: {
   tone?: 'info' | 'success' | 'warning' | 'error';
-  title?: ReactNode;
-  children: ReactNode;
+  title?: ComponentChildren;
+  children: ComponentChildren;
 }) {
   const className = tone === 'info' ? 'notice notice--info' : `notice ${tone}`;
   return (

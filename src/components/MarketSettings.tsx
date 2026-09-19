@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'preact/hooks';
 import type { AppSettings, MarketTimeframe } from '../lib/domain/types';
-import { INSTRUMENTS } from '../lib/market/instruments';
+import { INSTRUMENTS, PROVIDER_MAP } from '../lib/market/instruments';
 import { DEFAULT_WATCHLIST } from '../lib/market/signals';
 import { notificationSupport, requestNotificationPermission, type NotificationSupport } from '../lib/notify';
 import { Badge, Notice } from './ui';
@@ -8,14 +8,18 @@ import { clearMarketCache, loadAppSettings, updateMarketSettings } from './dataC
 
 const TIMEFRAMES: MarketTimeframe[] = ['M15', 'H1', 'H4'];
 
-/** Instruments with no keyless browser source — flagged so the UI can be honest. */
-const NEEDS_KEY = new Set(['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD']);
-const NEEDS_PROXY = new Set(['XAGUSD', 'WTIUSD']);
+/**
+ * Instruments whose only source is Dukascopy, which some ISPs block. Flagged in
+ * the picker so the watchlist does not quietly contain things that cannot load.
+ */
+const SINGLE_SOURCE = new Set(
+  INSTRUMENTS
+    .filter((instrument) => (PROVIDER_MAP[instrument.id] ?? []).length === 1)
+    .map((instrument) => instrument.id),
+);
 
 export default function MarketSettings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [twelveDataKey, setTwelveDataKey] = useState('');
-  const [alphaVantageKey, setAlphaVantageKey] = useState('');
   const [dataProxyUrl, setDataProxyUrl] = useState('');
   const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
   const [timeframe, setTimeframe] = useState<MarketTimeframe>('H1');
@@ -25,8 +29,6 @@ export default function MarketSettings() {
   useEffect(() => {
     loadAppSettings().then((loaded) => {
       setSettings(loaded);
-      setTwelveDataKey(loaded.twelveDataKey ?? '');
-      setAlphaVantageKey(loaded.alphaVantageKey ?? '');
       setDataProxyUrl(loaded.dataProxyUrl ?? '');
       setWatchlist(loaded.watchlist?.length ? loaded.watchlist : DEFAULT_WATCHLIST);
       setTimeframe(loaded.signalTimeframe ?? 'H1');
@@ -62,58 +64,32 @@ export default function MarketSettings() {
         <span className="badge">Fundamental &amp; Signals</span>
       </div>
       <p className="subtitle">
-        Semua data diambil langsung dari browser kamu, tanpa server perantara. API key disimpan
-        lokal di perangkat ini dan <strong>tidak ikut ke dalam file backup</strong>.
+        Tidak ada API key sama sekali. Harga diambil langsung dari browser kamu: Dukascopy untuk
+        forex, emas, perak, dan minyak; Binance dan Gate.io untuk BTC dan emas tokenised.
       </p>
 
-      <div className="grid u-mt-4" style={{ gap: 14 }}>
-        <div className="field">
-          <label htmlFor="twelvedata-key">API key Twelve Data</label>
-          <input
-            id="twelvedata-key"
-            type="password"
-            value={twelveDataKey}
-            placeholder="Kosongkan kalau belum punya"
-            onChange={(event) => setTwelveDataKey(event.target.value)}
-            onBlur={() => void persist({ twelveDataKey: twelveDataKey.trim() })}
-          />
-          <span className="field__hint">
-            Gratis 800 request/hari. Menyalakan 7 forex major. Tier gratisnya tidak mencakup
-            komoditas, jadi XAG dan WTI tetap butuh data proxy.
-          </span>
-        </div>
+      <Notice tone="info" title="Kalau sebagian instrumen tidak muncul">
+        Dukascopy adalah satu-satunya sumber gratis yang punya perak, minyak, dan forex major —
+        dan sebagian ISP di Indonesia memblokirnya. Kalau itu terjadi, BTC dan emas tetap jalan
+        lewat Binance/Gate.io, sisanya kosong sampai kamu pakai VPN, DNS alternatif, atau mengisi
+        data proxy di bawah.
+      </Notice>
 
-        <div className="field">
-          <label htmlFor="alphavantage-key">API key Alpha Vantage</label>
-          <input
-            id="alphavantage-key"
-            type="password"
-            value={alphaVantageKey}
-            placeholder="Kosongkan kalau belum punya"
-            onChange={(event) => setAlphaVantageKey(event.target.value)}
-            onBlur={() => void persist({ alphaVantageKey: alphaVantageKey.trim() })}
-          />
-          <span className="field__hint">
-            Untuk berita dan skor sentimen. Gratis 25 request/hari, jadi feed di-cache 6 jam.
-          </span>
-        </div>
-
-        <div className="field">
-          <label htmlFor="data-proxy">Data proxy URL (opsional)</label>
-          <input
-            id="data-proxy"
-            type="url"
-            value={dataProxyUrl}
-            placeholder="https://xxx.workers.dev/chart"
-            onChange={(event) => setDataProxyUrl(event.target.value)}
-            onBlur={() => void persist({ dataProxyUrl: dataProxyUrl.trim() })}
-          />
-          <span className="field__hint">
-            Endpoint milik kamu sendiri (mis. Cloudflare Worker, gratis 100k request/hari) yang
-            meneruskan Yahoo Finance dan menambahkan header CORS. Ini satu-satunya cara gratis
-            mendapat candle perak dan minyak, karena Yahoo tidak mengirim CORS ke browser.
-          </span>
-        </div>
+      <div className="field u-mt-4">
+        <label htmlFor="data-proxy">Data proxy URL (opsional)</label>
+        <input
+          id="data-proxy"
+          type="url"
+          value={dataProxyUrl}
+          placeholder="https://xxx.workers.dev/chart"
+          onInput={(event) => setDataProxyUrl(event.currentTarget.value)}
+          onBlur={() => void persist({ dataProxyUrl: dataProxyUrl.trim() })}
+        />
+        <span className="field__hint">
+          Bukan API key. Ini endpoint milik kamu sendiri (misalnya Cloudflare Worker, gratis 100k
+          request/hari) yang meneruskan Yahoo Finance dan menambahkan header CORS. Kalau diisi, ia
+          dipakai lebih dulu daripada sumber lain.
+        </span>
       </div>
 
       <fieldset className="theme-options" style={{ marginTop: 18 }}>
@@ -121,8 +97,7 @@ export default function MarketSettings() {
         <div className="filter-chips u-mt-2">
           {INSTRUMENTS.map((instrument) => {
             const selected = watchlist.includes(instrument.id);
-            const blocked = NEEDS_PROXY.has(instrument.id) && !dataProxyUrl;
-            const keyed = NEEDS_KEY.has(instrument.id) && !twelveDataKey && !dataProxyUrl;
+            const fragile = SINGLE_SOURCE.has(instrument.id) && !dataProxyUrl;
             return (
               <button
                 key={instrument.id}
@@ -133,18 +108,17 @@ export default function MarketSettings() {
                 style={selected
                   ? { borderColor: 'var(--brand)', color: 'var(--brand)', background: 'var(--brand-subtle)' }
                   : undefined}
-                title={blocked
-                  ? 'Butuh data proxy — tidak ada sumber gratis dari browser'
-                  : keyed ? 'Butuh API key Twelve Data' : undefined}
+                title={fragile ? 'Hanya tersedia lewat Dukascopy — tidak ada cadangan' : undefined}
               >
                 {instrument.label}
-                {(blocked || keyed) && ' *'}
+                {fragile && ' *'}
               </button>
             );
           })}
         </div>
         <p className="field__hint u-mt-2">
-          Tanda <strong>*</strong> berarti instrumen itu belum punya sumber data dengan pengaturan sekarang.
+          Tanda <strong>*</strong> berarti instrumen itu hanya punya satu sumber (Dukascopy), jadi
+          ia ikut mati kalau sumber itu tidak bisa dihubungi.
         </p>
       </fieldset>
 
@@ -154,7 +128,7 @@ export default function MarketSettings() {
           id="signal-timeframe"
           value={timeframe}
           onChange={(event) => {
-            const next = event.target.value as MarketTimeframe;
+            const next = event.currentTarget.value as MarketTimeframe;
             setTimeframe(next);
             void persist({ signalTimeframe: next });
           }}
@@ -213,7 +187,7 @@ export default function MarketSettings() {
         {status && <span className="save-state">{status}</span>}
       </div>
       <p className="field__hint u-mt-2">
-        Hanya menghapus candle, berita, dan alert yang di-cache. Trade, jurnal, dan review tidak tersentuh.
+        Hanya menghapus candle dan alert yang di-cache. Trade, jurnal, dan review tidak tersentuh.
       </p>
     </section>
   );

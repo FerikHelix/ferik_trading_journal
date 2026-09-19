@@ -18,11 +18,7 @@ export function findInstrument(id: string): Instrument | undefined {
   return INSTRUMENTS.find((instrument) => instrument.id === id);
 }
 
-/** Binance interval strings, keyed by our timeframe. */
 export const BINANCE_INTERVAL: Record<Timeframe, string> = { M15: '15m', H1: '1h', H4: '4h' };
-
-/** Twelve Data interval strings. `4h` is native, no client-side aggregation. */
-export const TWELVEDATA_INTERVAL: Record<Timeframe, string> = { M15: '15min', H1: '1h', H4: '4h' };
 
 export const TIMEFRAME_MS: Record<Timeframe, number> = {
   M15: 15 * 60_000,
@@ -31,40 +27,56 @@ export const TIMEFRAME_MS: Record<Timeframe, number> = {
 };
 
 /**
- * Where each instrument's candles can come from, best first.
+ * Where each instrument's candles come from, best source first. No API keys
+ * anywhere — everything here is either keyless or user-hosted.
  *
- * Reality check, all verified against live responses:
- *  - Binance's public mirror is keyless and CORS-open, but only carries crypto.
- *    PAXG/XAUT are tokenised gold and track spot closely enough for structure,
- *    though they trade through the weekend when real gold does not.
- *  - Twelve Data is CORS-open and covers every forex major on the free tier.
- *    Its free tier does NOT include commodities: XAG and WTI need a paid plan,
- *    and XAU is a trial symbol. Those entries are kept because they work the
- *    moment a user upgrades, and the UI degrades honestly when they 403.
- *  - 'proxy' is any user-supplied endpoint (e.g. their own Cloudflare Worker)
- *    that fronts a full-coverage feed. Configured in Settings, empty by default.
+ * The shape of the problem, all verified against live responses:
+ *
+ *  - **Dukascopy** is the only free source carrying real silver, crude oil and
+ *    every forex major. It has no CORS, so it is read over JSONP inside a
+ *    sandboxed iframe. It is also blocked by some Indonesian ISPs, which is
+ *    exactly why every instrument below still lists a fallback where one
+ *    exists.
+ *  - **Binance / Gate.io** are keyless and CORS-open but carry only crypto.
+ *    PAXG and XAUT are tokenised gold and track spot closely enough for
+ *    structure, though they trade through the weekend when real gold does not.
+ *  - **CoinGecko** is a last resort: it is the only keyless route to anything
+ *    like silver (tokenised KAG), at 4h granularity with a ~0.5% tracking
+ *    error and a harsh rate limit.
+ *  - There is no fallback at all for crude oil. If Dukascopy is unreachable,
+ *    the UI says so rather than showing a wrong number.
  */
 export const PROVIDER_MAP: Record<string, ProviderCapability[]> = {
   EURUSD: [
-    { provider: 'twelvedata', symbol: 'EUR/USD', requiresKey: true },
-    { provider: 'binance', symbol: 'EURUSDT', proxied: true, proxyNote: 'EURUSDT (basis USDT ~20 pip dari spot)' },
+    { provider: 'dukascopy', symbol: 'EUR/USD' },
+    { provider: 'binance', symbol: 'EURUSDT', proxied: true, proxyNote: 'EURUSDT di Binance (basis USDT, ~20 pip dari spot)' },
   ],
-  GBPUSD: [{ provider: 'twelvedata', symbol: 'GBP/USD', requiresKey: true }],
-  USDJPY: [{ provider: 'twelvedata', symbol: 'USD/JPY', requiresKey: true }],
-  USDCHF: [{ provider: 'twelvedata', symbol: 'USD/CHF', requiresKey: true }],
-  AUDUSD: [{ provider: 'twelvedata', symbol: 'AUD/USD', requiresKey: true }],
-  USDCAD: [{ provider: 'twelvedata', symbol: 'USD/CAD', requiresKey: true }],
-  NZDUSD: [{ provider: 'twelvedata', symbol: 'NZD/USD', requiresKey: true }],
+  GBPUSD: [{ provider: 'dukascopy', symbol: 'GBP/USD' }],
+  USDJPY: [{ provider: 'dukascopy', symbol: 'USD/JPY' }],
+  USDCHF: [{ provider: 'dukascopy', symbol: 'USD/CHF' }],
+  AUDUSD: [{ provider: 'dukascopy', symbol: 'AUD/USD' }],
+  USDCAD: [{ provider: 'dukascopy', symbol: 'USD/CAD' }],
+  NZDUSD: [{ provider: 'dukascopy', symbol: 'NZD/USD' }],
   XAUUSD: [
-    { provider: 'twelvedata', symbol: 'XAU/USD', requiresKey: true },
-    { provider: 'binance', symbol: 'PAXGUSDT', proxied: true, proxyNote: 'PAXG (emas tokenised, jalan 24/7 termasuk weekend)' },
+    { provider: 'dukascopy', symbol: 'XAU/USD' },
+    { provider: 'gateio', symbol: 'PAXG_USDT', proxied: true, proxyNote: 'PAXG (emas tokenised, jalan 24/7 termasuk akhir pekan)' },
+    { provider: 'binance', symbol: 'PAXGUSDT', proxied: true, proxyNote: 'PAXG (emas tokenised, jalan 24/7 termasuk akhir pekan)' },
   ],
-  XAGUSD: [{ provider: 'twelvedata', symbol: 'XAG/USD', requiresKey: true }],
-  WTIUSD: [{ provider: 'twelvedata', symbol: 'WTI/USD', requiresKey: true }],
-  BTCUSD: [{ provider: 'binance', symbol: 'BTCUSDT' }],
+  XAGUSD: [
+    { provider: 'dukascopy', symbol: 'XAG/USD' },
+    { provider: 'coingecko', symbol: 'kinesis-silver', proxied: true, proxyNote: 'KAG (perak tokenised, hanya 4 jam-an, meleset ~0.5%)' },
+  ],
+  // WTI = `E_Light`, Brent = `E_Brent`. The `LIGHT.CMD/USD` form that appears
+  // in Dukascopy's file names is NOT a valid API instrument key.
+  WTIUSD: [{ provider: 'dukascopy', symbol: 'E_Light' }],
+  BTCUSD: [
+    { provider: 'binance', symbol: 'BTCUSDT' },
+    { provider: 'gateio', symbol: 'BTC_USDT' },
+    { provider: 'dukascopy', symbol: 'BTC/USD' },
+  ],
 };
 
-/** Yahoo symbols, used only when a user has configured their own proxy. */
+/** Yahoo symbols, used only when the user has configured their own proxy. */
 export const PROXY_SYMBOL: Record<string, string> = {
   EURUSD: 'EURUSD=X',
   GBPUSD: 'GBPUSD=X',
@@ -80,14 +92,13 @@ export const PROXY_SYMBOL: Record<string, string> = {
   BTCUSD: 'BTC-USD',
 };
 
-export function capabilitiesFor(instrumentId: string, hasKey: boolean, hasProxy: boolean): ProviderCapability[] {
+export function capabilitiesFor(instrumentId: string, hasProxy: boolean): ProviderCapability[] {
   const options: ProviderCapability[] = [];
+  // A user-hosted proxy is the most reliable source when one is configured,
+  // so it goes first.
   if (hasProxy && PROXY_SYMBOL[instrumentId]) {
     options.push({ provider: 'proxy', symbol: PROXY_SYMBOL[instrumentId] });
   }
-  for (const capability of PROVIDER_MAP[instrumentId] ?? []) {
-    if (capability.requiresKey && !hasKey) continue;
-    options.push(capability);
-  }
+  options.push(...(PROVIDER_MAP[instrumentId] ?? []));
   return options;
 }

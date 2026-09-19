@@ -16,7 +16,7 @@ Consult these guides before working on related tasks:
 
 - [Adding pages, dynamic routes, or middleware](https://docs.astro.build/en/guides/routing/)
 - [Working with Astro components](https://docs.astro.build/en/basics/astro-components/)
-- [Using React, Vue, Svelte, or other framework components](https://docs.astro.build/en/guides/framework-components/)
+- [Using Preact or other framework components](https://docs.astro.build/en/guides/framework-components/)
 - [Adding or managing content](https://docs.astro.build/en/guides/content-collections/)
 - [Adding styles or using Tailwind](https://docs.astro.build/en/guides/styling/)
 - [Supporting multiple languages](https://docs.astro.build/en/guides/internationalization/)
@@ -43,7 +43,7 @@ stylesheet. Put new rules in the matching file under `tokens/`, `layout/`,
 first).
 
 The design system must stay **global**, not Astro-scoped: every page body is a
-hydrated React island, and Astro's scoping never reaches markup a framework
+hydrated Preact island, and Astro's scoping never reaches markup a framework
 component renders.
 
 Two rules the tests enforce (`tests/unit/tokens.test.ts`):
@@ -67,17 +67,49 @@ need extra specificity to survive the cascade.
 `tests/unit/nav.test.ts` checks ids are unique, paths end in `/`, and every
 icon name exists.
 
+## Preact, not React
+
+Islands import from `preact/hooks`. Two rules exist because the compiler will
+not catch either mistake:
+
+- **Text inputs and textareas use `onInput`, never `onChange`.** Preact binds
+  `onChange` to the native `change` event, which only fires on blur, so a
+  controlled field silently stops accepting typed text. Selects, radios and
+  file inputs keep `onChange` — there the native event is correct.
+  `tests/e2e/typing.spec.ts` guards this, and it is written to actually fail:
+  asserting the field's own value proves nothing (with no re-render the browser
+  keeps the typed text), so it asserts a state-driven side effect instead.
+- **Use `event.currentTarget`, not `event.target`.** Preact types `target` as a
+  bare `EventTarget` with no `.value`. This one does fail typecheck.
+
+`useSyncExternalStore` does not exist in `preact/hooks`; `useActiveAccount`
+uses a plain subscription instead.
+
 ## Market data
 
-All fetching happens in the browser — there is no backend and no scheduled job.
-`src/lib/market/client.ts` is cache-first against IndexedDB because the free
-tiers are small (Twelve Data 800/day and 8/min, Alpha Vantage 25/day), and it
-returns stale cached candles rather than throwing when a provider fails.
+All fetching happens in the browser. There is no backend, no scheduled job and
+**no API keys anywhere** — every source is keyless or user-hosted.
 
-Providers are selected per instrument in `src/lib/market/instruments.ts`. Only
-sources that send `Access-Control-Allow-Origin` can ever be used; Yahoo
-Finance, GDELT and every finance RSS feed do not, which is why silver and crude
-oil need a user-supplied proxy.
+`src/lib/market/client.ts` is cache-first against IndexedDB and returns stale
+cached candles rather than throwing when a provider fails. Providers are
+selected per instrument in `src/lib/market/instruments.ts`.
+
+Only sources that send `Access-Control-Allow-Origin` can be fetched. Yahoo
+Finance, GDELT and every finance RSS feed do not, which is why there is no news
+feed at all and why silver and oil have only one source.
+
+**Dukascopy is the exception and needs care.** It is the only free source
+carrying silver, crude oil and every forex major, but it has no CORS, so it is
+read over JSONP — third-party JavaScript. That script runs inside
+`public/dukascopy-frame.html`, loaded in an `<iframe sandbox="allow-scripts">`
+with no `allow-same-origin`, so it sits in an opaque origin and cannot reach the
+IndexedDB holding the trading journal. Keep it that way. The frame is a real
+file rather than `srcdoc` because the endpoint 403s without a `Referer`.
+
+Some ISPs blackhole that host, so `providers/dukascopy.ts` has a circuit
+breaker persisted in `sessionStorage`. Without persistence a multi-page app
+pays the timeout again on every navigation; with it, the cost is one ~6s wait
+per session instead of one per page.
 
 Prices use `number`, unlike account money which is `DecimalString`. See the note
 at the top of `src/lib/market/types.ts` before changing that.
@@ -87,8 +119,16 @@ at the top of `src/lib/market/types.ts` before changing that.
 ```sh
 npm test            # vitest, lib/ only
 npm run check       # astro check
-npm run test:e2e    # playwright
+npm run test:e2e    # playwright — local only, NOT in CI
 ```
+
+CI runs `npm test` and `npm run check` before deploying. The Playwright job was
+removed: it could never get a preview server to answer on the runner
+(`Timed out waiting 60000ms from config.webServer`) and blocked every deploy.
+
+Locally, `astro preview` detaches into a background daemon when it detects an
+agent environment, which makes Playwright's `webServer` look like it exited.
+Start the server yourself first, then run the tests against it.
 
 If port 4321 is already taken, run e2e with `PREVIEW_PORT=4331 npx playwright test`.
 

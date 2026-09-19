@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'preact/hooks';
 import type { Account } from '../lib/domain/types';
 import { resolveAccountId, setActiveAccountId } from '../lib/account-scope';
 import { loadAccounts } from './dataClient';
@@ -27,7 +27,7 @@ export default function AccountSwitcher() {
     <label className="account-pill">
       <span className="status-dot" aria-hidden="true" />
       <span className="u-sr-only">Account aktif</span>
-      <select value={accountId} onChange={(event) => setAccount(event.target.value)}>
+      <select value={accountId} onChange={(event) => setAccount(event.currentTarget.value)}>
         <option value="">Semua account</option>
         {accounts.map((account) => (
           <option key={account.id} value={account.id}>

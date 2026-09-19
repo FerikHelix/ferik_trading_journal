@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import ChartPanel from './ChartPanel';
 import { calculateAnalytics } from '../lib/analytics';
 import { isMeaningfulJournal } from '../lib/review';

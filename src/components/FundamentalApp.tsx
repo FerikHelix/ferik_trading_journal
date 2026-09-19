@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { AppSettings } from '../lib/domain/types';
 import { BIAS_LABEL, computeBias } from '../lib/market/bias';
-import { loadCandles, loadNews } from '../lib/market/client';
+import { loadCandles } from '../lib/market/client';
 import { findInstrument } from '../lib/market/instruments';
 import { resolveWatchlist } from '../lib/market/signals';
-import type { InstrumentBias, NewsItem } from '../lib/market/types';
-import { Badge, Card, EmptyState, Icon, Notice, Skeleton, Tabs } from './ui';
+import type { InstrumentBias } from '../lib/market/types';
+import { Badge, Icon, Notice, Skeleton } from './ui';
 import { loadAppSettings } from './dataClient';
 import { marketCacheIO } from './marketCacheIO';
 
@@ -17,6 +17,7 @@ interface Row {
   bias: InstrumentBias | null;
   price: number | null;
   changePercent: number | null;
+  provider?: string;
   proxyNote?: string;
   error?: string;
 }
@@ -100,28 +101,12 @@ function BiasCard({ row }: { row: Row }) {
 export default function FundamentalApp() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
-  const [news, setNews] = useState<NewsItem[]>([]);
-  const [newsState, setNewsState] = useState<{ stale: boolean; error?: string }>({ stale: false });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [newsFilter, setNewsFilter] = useState<string>('all');
 
   const run = useCallback(async (force: boolean) => {
     const current = await loadAppSettings();
     setSettings(current);
-
-    // News is fetched BEFORE the candles so sentiment can feed straight into
-    // computeBias. Doing it the other way round would mean either a second
-    // pass over every instrument or a bias that silently ignores the feed.
-    let feedItems: NewsItem[] = [];
-    try {
-      const feed = await loadNews(current, marketCacheIO, { force });
-      feedItems = feed.items;
-      setNews(feed.items);
-      setNewsState({ stale: feed.stale });
-    } catch (error) {
-      setNewsState({ stale: false, error: error instanceof Error ? error.message : 'Gagal memuat berita.' });
-    }
 
     const watchlist = resolveWatchlist(current);
     const collected: Row[] = [];
@@ -130,7 +115,8 @@ export default function FundamentalApp() {
       const instrument = findInstrument(instrumentId);
       if (!instrument) continue;
 
-      // Spaced out to stay inside Twelve Data's 8-requests-per-minute ceiling.
+      // Spaced out because several of these endpoints rate-limit a burst;
+      // CoinGecko starts refusing after about six requests in twenty seconds.
       if (index > 0) await new Promise((resolve) => setTimeout(resolve, 350));
 
       try {
@@ -143,9 +129,10 @@ export default function FundamentalApp() {
           label: instrument.label,
           name: instrument.name,
           digits: instrument.digits,
-          bias: computeBias({ instrument, candles, news: feedItems }),
+          bias: computeBias({ instrument, candles }),
           price: last?.c ?? null,
           changePercent: last && reference ? ((last.c - reference.c) / reference.c) * 100 : null,
+          provider: result.provider,
           proxyNote: result.proxyNote,
         });
       } catch (error) {
@@ -162,7 +149,6 @@ export default function FundamentalApp() {
       }
       setRows([...collected]);
     }
-
   }, []);
 
   useEffect(() => {
@@ -175,13 +161,7 @@ export default function FundamentalApp() {
     setRefreshing(false);
   }
 
-  const missingKey = settings && !settings.twelveDataKey;
-  const missingNewsKey = settings && !settings.alphaVantageKey;
-
-  const tags = ['all', ...new Set(news.flatMap((item) => item.tags))].slice(0, 9);
-  const visibleNews = newsFilter === 'all'
-    ? news
-    : news.filter((item) => item.tags.includes(newsFilter));
+  const failed = rows.filter((row) => row.error);
 
   if (loading && rows.length === 0) {
     return (
@@ -202,7 +182,7 @@ export default function FundamentalApp() {
       <div className="u-row-between u-wrap">
         <p className="provider-status u-mb-0">
           <Icon name="activity" size={13} />
-          Data dari Binance (tanpa key) dan Twelve Data (key kamu). Cache lokal dipakai dulu agar kuota gratis tidak cepat habis.
+          Bias dihitung dari tren, struktur pasar, dan momentum. Tanpa API key — data di-cache lokal.
         </p>
         <button className="btn" type="button" onClick={refresh} disabled={refreshing}>
           <Icon name="refresh-cw" size={14} />
@@ -210,11 +190,11 @@ export default function FundamentalApp() {
         </button>
       </div>
 
-      {missingKey && (
-        <Notice tone="warning" title="Sebagian instrumen belum punya sumber data">
-          Tanpa API key Twelve Data, hanya BTC dan emas (lewat proxy PAXG) yang bisa diambil dari browser.
-          Forex major butuh key gratis Twelve Data. XAG dan WTI tidak tersedia di tier gratis mana pun —
-          butuh data proxy sendiri. Atur di <a href={`${base}settings/`}>Settings</a>.
+      {settings && failed.length > 0 && (
+        <Notice tone="warning" title="Sebagian instrumen tidak bisa dimuat">
+          {failed.map((row) => row.label).join(', ')} gagal diambil. Penyebab paling umum: Dukascopy
+          diblokir oleh ISP. Coba VPN atau DNS alternatif, atau isi data proxy di{' '}
+          <a href={`${base}settings/`}>Settings</a>.
         </Notice>
       )}
 
@@ -222,56 +202,12 @@ export default function FundamentalApp() {
         {rows.map((row) => <BiasCard key={row.instrumentId} row={row} />)}
       </div>
 
-      <Card
-        title="Berita & sentimen"
-        description="Headline pasar yang ditandai per mata uang dan instrumen."
-        badge={newsState.stale ? <Badge tone="warning">Cache</Badge> : undefined}
-      >
-        {missingNewsKey ? (
-          <EmptyState
-            icon="newspaper"
-            title="Belum ada sumber berita"
-            description={
-              <>Isi API key gratis Alpha Vantage di Settings untuk menarik headline beserta skor sentimen.
-                Feed RSS biasa tidak bisa dipakai karena tidak mengirim header CORS.</>
-            }
-            action={<a className="btn primary" href={`${base}settings/`}>Buka Settings</a>}
-            compact
-          />
-        ) : newsState.error ? (
-          <Notice tone="error">{newsState.error}</Notice>
-        ) : news.length === 0 ? (
-          <EmptyState icon="newspaper" title="Belum ada berita" compact />
-        ) : (
-          <>
-            <Tabs
-              label="Filter berita"
-              active={newsFilter}
-              onChange={setNewsFilter}
-              items={tags.map((tag) => ({ id: tag, label: tag === 'all' ? 'Semua' : tag }))}
-            />
-            <div className="news-list">
-              {visibleNews.slice(0, 25).map((item) => (
-                <article className="news-item" key={item.id}>
-                  <a className="news-item__title" href={item.url} target="_blank" rel="noopener noreferrer">
-                    {item.title}
-                  </a>
-                  <div className="news-item__meta">
-                    <span>{item.source}</span>
-                    <span>{new Date(item.publishedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                    {typeof item.sentiment === 'number' && (
-                      <Badge tone={item.sentiment > 0.1 ? 'profit' : item.sentiment < -0.1 ? 'loss' : 'neutral'}>
-                        {item.sentiment >= 0 ? '+' : ''}{item.sentiment.toFixed(2)}
-                      </Badge>
-                    )}
-                    {item.tags.slice(0, 4).map((tag) => <Badge key={tag}>{tag}</Badge>)}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </>
-        )}
-      </Card>
+      <Notice tone="info" title="Cara membaca bias">
+        Tiga sinyal digabung dengan bobot tetap: tren (MA20 vs MA50) 40%, struktur pasar
+        (BOS/CHoCH terakhir) 35%, dan momentum 25%. Keyakinan turun kalau salah satu sinyal belum
+        bisa dihitung — misalnya candle belum cukup untuk MA50. Buka <strong>Alasan</strong> di
+        tiap kartu untuk melihat angka mentah di balik keputusannya.
+      </Notice>
     </div>
   );
 }

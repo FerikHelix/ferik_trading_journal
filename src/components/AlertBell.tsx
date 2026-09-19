@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { SignalAlert } from '../lib/domain/types';
 import { alertTitle, describeAlert, scanWatchlist } from '../lib/market/signals';
 import { showNotifications } from '../lib/notify';

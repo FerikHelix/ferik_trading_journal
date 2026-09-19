@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import ChartPanel from './ChartPanel';
 import { calculateAnalytics, type SeriesPoint } from '../lib/analytics';
 import type { Account, Journal, Position } from '../lib/domain/types';
@@ -95,8 +95,8 @@ export default function AnalyticsApp() {
     <section className="card analytics-filters" aria-label="Filter analytics">
       <div className="analytics-filter-heading"><div><span className="eyebrow">Filter performa</span><h2>{dateDescription}</h2></div><span className="badge">{metrics.totalPositions} closed position</span></div>
       <div className="analytics-filter-controls">
-        <div className="field"><label htmlFor="analytics-period">Periode</label><select id="analytics-period" value={preset} onChange={(event) => selectPreset(event.target.value as RangePreset)}><option value="7d">7 hari terakhir</option><option value="30d">30 hari terakhir</option><option value="90d">90 hari terakhir</option><option value="month">Bulan ini</option><option value="all">Semua waktu</option><option value="custom">Tanggal kustom</option></select></div>
-        {preset === 'custom' && <><div className="field"><label htmlFor="analytics-from">Dari</label><input id="analytics-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></div><div className="field"><label htmlFor="analytics-to">Sampai</label><input id="analytics-to" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></div></>}
+        <div className="field"><label htmlFor="analytics-period">Periode</label><select id="analytics-period" value={preset} onChange={(event) => selectPreset(event.currentTarget.value as RangePreset)}><option value="7d">7 hari terakhir</option><option value="30d">30 hari terakhir</option><option value="90d">90 hari terakhir</option><option value="month">Bulan ini</option><option value="all">Semua waktu</option><option value="custom">Tanggal kustom</option></select></div>
+        {preset === 'custom' && <><div className="field"><label htmlFor="analytics-from">Dari</label><input id="analytics-from" type="date" value={from} onInput={(event) => setFrom(event.currentTarget.value)} /></div><div className="field"><label htmlFor="analytics-to">Sampai</label><input id="analytics-to" type="date" value={to} onInput={(event) => setTo(event.currentTarget.value)} /></div></>}
       </div>
     </section>
     {metrics.requiresCurrencySelection && <div className="notice warning">Account menggunakan currency berbeda. Pilih satu account untuk melihat metrik nominal dan P&amp;L per grup.</div>}

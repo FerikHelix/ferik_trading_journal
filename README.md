@@ -22,7 +22,8 @@ npm run build
 npm run test:e2e
 ```
 
-Kalau port 4321 sedang dipakai project lain, jalankan e2e di port lain:
+E2E tidak dijalankan di CI — GitHub Actions hanya menjalankan unit test, typecheck, lalu deploy.
+Jalankan e2e secara lokal. Kalau port 4321 dipakai project lain:
 
 ```sh
 PREVIEW_PORT=4331 npx playwright test
@@ -38,22 +39,32 @@ PREVIEW_PORT=4331 npx playwright test
 
 ## Sumber data market
 
-Diisi di **Settings → Sumber data market**. API key disimpan lokal dan **tidak ikut ke file backup**.
+**Tidak ada API key sama sekali.** Semua harga diambil langsung dari browser, tanpa backend dan
+tanpa GitHub Actions.
 
-| Instrumen | Sumber | Butuh key? |
+| Instrumen | Sumber utama | Cadangan |
 | --- | --- | --- |
-| BTCUSD | `data-api.binance.vision` | tidak |
-| XAUUSD | Binance `PAXGUSDT` (proxy emas, jalan 24/7) | tidak |
-| 7 forex major | Twelve Data | key gratis |
-| Berita + sentimen | Alpha Vantage `NEWS_SENTIMENT` | key gratis |
-| XAGUSD, WTIUSD | tidak ada sumber gratis | butuh data proxy |
+| BTCUSD | Binance (tanpa key) | Gate.io, Dukascopy |
+| XAUUSD | Dukascopy | Gate.io / Binance `PAXG` (emas tokenised) |
+| XAGUSD | Dukascopy | CoinGecko `KAG` (4 jam-an, meleset ~0.5%) |
+| WTIUSD | Dukascopy | tidak ada |
+| 7 forex major | Dukascopy | `EURUSDT` Binance untuk EURUSD saja |
 
-Batasan yang perlu diketahui:
+Hal yang perlu diketahui:
 
-- **Perak dan minyak tidak punya sumber gratis yang bisa dipanggil dari browser.** Yahoo Finance punya datanya, tetapi tidak mengirim header CORS sama sekali, jadi mustahil dipanggil langsung. Tier gratis Twelve Data tidak mencakup komoditas.
-- Solusinya: isi **Data proxy URL** dengan endpoint milik sendiri (mis. Cloudflare Worker, gratis 100k request/hari) yang meneruskan Yahoo dan menambahkan header CORS.
-- Emas lewat PAXG adalah emas tokenised, jadi ada candle akhir pekan yang tidak dimiliki spot gold.
-- Kuota gratis ketat (Twelve Data 800/hari & 8/menit, Alpha Vantage 25/hari), jadi respons di-cache di IndexedDB dan permintaan dijeda antar instrumen.
+- **Dukascopy satu-satunya sumber gratis yang punya perak, minyak, dan forex major.** Ia tidak
+  mengirim header CORS, jadi dibaca lewat JSONP — artinya menjalankan JavaScript pihak ketiga.
+  Skrip itu dijalankan di dalam `<iframe sandbox="allow-scripts">` beropini origin opaque, jadi ia
+  tidak bisa menyentuh IndexedDB berisi jurnal trading. Lihat `public/dukascopy-frame.html`.
+- **Sebagian ISP di Indonesia memblokir host itu.** Kalau terblokir, BTC dan emas tetap jalan lewat
+  Binance/Gate.io; perak, minyak, dan forex kosong sampai kamu pakai VPN atau DNS alternatif.
+  Ada circuit breaker supaya biayanya hanya satu kali tunggu ±6 detik per sesi, bukan per halaman.
+- **Tidak ada feed berita.** Semua RSS keuangan dan API berita tidak mengirim CORS, jadi bias di
+  halaman Fundamental dihitung murni dari price action: tren (MA20 vs MA50) 40%, struktur pasar
+  (BOS/CHoCH) 35%, momentum 25%.
+- Opsional: isi **Data proxy URL** di Settings dengan endpoint milik sendiri (mis. Cloudflare
+  Worker, gratis 100k request/hari) yang meneruskan Yahoo Finance dan menambahkan CORS. Itu bukan
+  API key, dan kalau diisi ia dipakai lebih dulu.
 
 ## Sinyal SMC
 
@@ -65,6 +76,9 @@ Order block dideteksi otomatis dari candle, bukan diinput manual:
 4. Statusnya dievaluasi terhadap harga sekarang: `fresh`, `approaching`, `touched`, `mitigated`, `invalid`.
 
 Status `approaching` dan `touched` memunculkan alert di lonceng topbar, dan menjadi notifikasi browser bila diizinkan di Settings. Karena ini situs statis tanpa service worker, notifikasi hanya bisa muncul saat tab terbuka.
+
+Zona order block juga digambar langsung di chart candlestick halaman Signals (lightweight-charts),
+hijau untuk bullish dan merah untuk bearish, dan diredupkan kalau sudah mitigated atau invalid.
 
 Logikanya murni fungsi dari array candle, jadi bisa diuji tanpa jaringan — lihat `tests/unit/smc.test.ts`.
 

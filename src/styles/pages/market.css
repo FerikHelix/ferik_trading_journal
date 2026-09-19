@@ -119,3 +119,30 @@
   .calendar-row { grid-template-columns: 50px 40px minmax(0, 1fr); row-gap: 2px; }
   .calendar-row span:nth-last-child(-n+3) { text-align: left; grid-column: 3; }
 }
+
+.candle-chart {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+.candle-chart canvas { display: block; }
+.signal-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.signal-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: var(--text-tertiary); font-size: 11px; }
+.signal-legend__swatch {
+  display: inline-block;
+  width: 18px; height: 9px;
+  margin-right: 5px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.signal-legend__swatch--bull { background: color-mix(in srgb, var(--chart-bull) 20%, transparent); border: 1px solid var(--chart-bull); }
+.signal-legend__swatch--bear { background: color-mix(in srgb, var(--chart-bear) 20%, transparent); border: 1px solid var(--chart-bear); }

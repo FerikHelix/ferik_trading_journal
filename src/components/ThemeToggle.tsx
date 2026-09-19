@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'preact/hooks';
 import type { ThemePreference } from '../lib/domain/types';
 import {
   THEME_STORAGE_KEY,

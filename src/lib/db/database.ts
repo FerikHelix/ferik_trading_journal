@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type {
-  Account, AppSettings, BalanceEvent, CachedCandles, CachedNews, Deal, ImportBatch, Journal,
+  Account, AppSettings, BalanceEvent, CachedCandles, Deal, ImportBatch, Journal,
   ParsedImport, Position, SignalAlert, WeeklyReview,
 } from '../domain/types';
 import { aggregatePositions } from '../import/aggregate';
@@ -16,7 +16,6 @@ export class TradingJournalDatabase extends Dexie {
   balanceEvents!: EntityTable<BalanceEvent, 'id'>;
   settings!: EntityTable<AppSettings, 'id'>;
   marketCandles!: EntityTable<CachedCandles, 'id'>;
-  marketNews!: EntityTable<CachedNews, 'id'>;
   signalAlerts!: EntityTable<SignalAlert, 'id'>;
 
   /**
@@ -46,6 +45,10 @@ export class TradingJournalDatabase extends Dexie {
       marketNews: '&id, publishedAt, fetchedAt, *tags',
       signalAlerts: '&id, instrumentId, createdAt, status, seenAt',
     });
+    // v4 drops the news cache. No keyless, CORS-open headline source exists, so
+    // the feature was removed rather than left half-working. `null` tells Dexie
+    // to delete the table instead of creating it.
+    this.version(4).stores({ marketNews: null });
     this.on('populate', () => this.settings.add(defaultSettings()));
   }
 }
@@ -227,7 +230,7 @@ export async function clearAllData(): Promise<void> {
 
 export async function updateMarketSettings(
   patch: Partial<Pick<AppSettings,
-    'twelveDataKey' | 'alphaVantageKey' | 'dataProxyUrl' | 'watchlist' | 'signalTimeframe' | 'desktopNotifications'>>,
+    'dataProxyUrl' | 'watchlist' | 'signalTimeframe' | 'desktopNotifications'>>,
 ): Promise<AppSettings> {
   const settings = { ...await getAppSettings(), ...patch };
   await db.settings.put(settings);
@@ -240,19 +243,6 @@ export async function getCachedCandles(id: string): Promise<CachedCandles | unde
 
 export async function putCachedCandles(entry: CachedCandles): Promise<void> {
   await db.marketCandles.put(entry);
-}
-
-export async function getCachedNews(limit = 120): Promise<CachedNews[]> {
-  const news = await db.marketNews.orderBy('publishedAt').reverse().limit(limit).toArray();
-  return news;
-}
-
-export async function putCachedNews(items: CachedNews[]): Promise<void> {
-  if (items.length === 0) return;
-  await db.marketNews.bulkPut(items);
-  // Keep the cache bounded; headlines older than the newest 300 are noise.
-  const stale = await db.marketNews.orderBy('publishedAt').reverse().offset(300).primaryKeys();
-  if (stale.length) await db.marketNews.bulkDelete(stale as string[]);
 }
 
 export async function getSignalAlerts(limit = 50): Promise<SignalAlert[]> {
@@ -282,7 +272,7 @@ export async function markAlertsSeen(ids: string[]): Promise<void> {
 
 /** Market caches only — never touches trades, journals or reviews. */
 export async function clearMarketCache(): Promise<void> {
-  await db.transaction('rw', db.marketCandles, db.marketNews, db.signalAlerts, async () => {
-    await Promise.all([db.marketCandles.clear(), db.marketNews.clear(), db.signalAlerts.clear()]);
+  await db.transaction('rw', db.marketCandles, db.signalAlerts, async () => {
+    await Promise.all([db.marketCandles.clear(), db.signalAlerts.clear()]);
   });
 }

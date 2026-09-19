@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Deal, Journal, Position } from '../lib/domain/types';
 import { SideBadge } from './ui';
 import { loadPositionBundle, saveJournal } from './dataClient';
@@ -23,5 +23,5 @@ export default function JournalApp(){
 }
 const split=(v:string)=>v.split(',').map(x=>x.trim()).filter(Boolean);
 function Fact({label,value}:{label:string;value:string}){return <div><div className="stat-label">{label}</div><strong style={{display:'block',marginTop:6,fontSize:12}}>{value}</strong></div>}
-function Text({label,value,set,type='text'}:{label:string;value:string;set:(v:string)=>void;type?:string}){return <div className="field"><label>{label}</label><input aria-label={label} type={type} value={value} onChange={e=>set(e.target.value)}/></div>}
-function Area({label,value,set}:{label:string;value:string;set:(v:string)=>void}){return <div className="field span-2"><label>{label}</label><textarea aria-label={label} value={value} onChange={e=>set(e.target.value)}/></div>}
+function Text({label,value,set,type='text'}:{label:string;value:string;set:(v:string)=>void;type?:string}){return <div className="field"><label>{label}</label><input aria-label={label} type={type} value={value} onInput={e=>set(e.currentTarget.value)}/></div>}
+function Area({label,value,set}:{label:string;value:string;set:(v:string)=>void}){return <div className="field span-2"><label>{label}</label><textarea aria-label={label} value={value} onInput={e=>set(e.currentTarget.value)}/></div>}

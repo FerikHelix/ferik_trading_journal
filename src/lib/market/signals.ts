@@ -2,12 +2,14 @@ import type { AppSettings, SignalAlert } from '../domain/types';
 import { ALERTABLE_STATUSES, detectOrderBlocks, type OrderBlock } from '../smc';
 import { loadCandles, type MarketCacheIO } from './client';
 import { findInstrument } from './instruments';
-import type { Instrument, Timeframe } from './types';
+import type { Candle, Instrument, Timeframe } from './types';
 
 export interface InstrumentScan {
   instrument: Instrument;
   timeframe: Timeframe;
   blocks: OrderBlock[];
+  /** Carried through so the chart can be drawn without refetching. */
+  candles: Candle[];
   lastPrice: number;
   lastCandleAt: number;
   provider: string;
@@ -65,13 +67,20 @@ export function resolveWatchlist(settings: AppSettings): string[] {
  * Scans the watchlist for order blocks and returns the alert-worthy ones.
  *
  * Instruments are fetched sequentially with a small gap rather than in
- * parallel: Twelve Data's free tier allows 8 requests per minute and answers a
- * burst with 429s, which would look like "the app is broken" to the user.
+ * parallel: these are free public endpoints and several answer a burst with
+ * 429s, which would look like "the app is broken" to the user.
  */
 export async function scanWatchlist(
   settings: AppSettings,
   io: MarketCacheIO,
-  options: { timeframe?: Timeframe; force?: boolean; signal?: AbortSignal; spacingMs?: number } = {},
+  options: {
+    timeframe?: Timeframe;
+    force?: boolean;
+    signal?: AbortSignal;
+    spacingMs?: number;
+    /** Called after each instrument so the UI can fill in progressively. */
+    onProgress?: (partial: ScanResult) => void;
+  } = {},
 ): Promise<ScanResult> {
   const timeframe = options.timeframe ?? settings.signalTimeframe ?? 'H1';
   const spacing = options.spacingMs ?? 350;
@@ -103,6 +112,7 @@ export async function scanWatchlist(
         instrument,
         timeframe,
         blocks,
+        candles: result.candles,
         lastPrice: last.c,
         lastCandleAt: last.t,
         provider: result.provider,
@@ -115,6 +125,7 @@ export async function scanWatchlist(
         if (!ALERTABLE_STATUSES.includes(block.status)) continue;
         alerts.push(toAlert(instrument, timeframe, block, last.c));
       }
+      options.onProgress?.({ scans: [...scans], failures: [...failures], alerts: [...alerts] });
     } catch (error) {
       if ((error as Error)?.name === 'AbortError') throw error;
       failures.push({
@@ -122,6 +133,7 @@ export async function scanWatchlist(
         label: instrument.label,
         message: error instanceof Error ? error.message : 'Gagal memuat data.',
       });
+      options.onProgress?.({ scans: [...scans], failures: [...failures], alerts: [...alerts] });
     }
   }
 

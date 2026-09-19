@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import Chart from 'chart.js/auto';
 import { subscribeToThemeChange } from '../lib/theme';
 

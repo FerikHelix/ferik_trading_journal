@@ -1,5 +1,5 @@
 import type { MarketCacheIO } from '../lib/market/client';
-import { getCachedCandles, getCachedNews, putCachedCandles, putCachedNews } from './dataClient';
+import { getCachedCandles, putCachedCandles } from './dataClient';
 
 /**
  * Binds the market client's storage interface to Dexie.
@@ -11,6 +11,4 @@ import { getCachedCandles, getCachedNews, putCachedCandles, putCachedNews } from
 export const marketCacheIO: MarketCacheIO = {
   getCandles: getCachedCandles,
   putCandles: putCachedCandles,
-  getNews: getCachedNews,
-  putNews: putCachedNews,
 };

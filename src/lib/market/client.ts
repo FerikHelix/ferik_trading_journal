@@ -1,15 +1,17 @@
-import type { AppSettings, CachedCandles, CachedNews } from '../domain/types';
+import type { AppSettings, CachedCandles } from '../domain/types';
 import { capabilitiesFor, findInstrument } from './instruments';
-import { fetchAlphaVantageNews } from './providers/alphavantage';
 import { fetchBinanceCandles } from './providers/binance';
+import { fetchCoinGeckoCandles } from './providers/coingecko';
+import { fetchDukascopyCandles } from './providers/dukascopy';
+import { fetchGateioCandles } from './providers/gateio';
 import { fetchProxyCandles } from './providers/proxy';
-import { fetchTwelveDataCandles } from './providers/twelvedata';
-import { MarketDataError, type Candle, type CandleResult, type NewsItem, type ProviderId, type Timeframe } from './types';
+import { MarketDataError, type Candle, type CandleResult, type ProviderId, type Timeframe } from './types';
 
 /**
- * How stale a cached series may be before a refetch. Tuned against the tight
- * free-tier budgets (Twelve Data 800/day and 8/min, Alpha Vantage 25/day) —
- * the app is opened many times a day and must not burn the quota on reloads.
+ * How stale a cached series may be before a refetch. Every source here is a
+ * free public endpoint with its own rate limiting (CoinGecko starts refusing
+ * after roughly six requests in twenty seconds), and the app is opened many
+ * times a day, so the cache does most of the work.
  */
 const CANDLE_TTL: Record<Timeframe, number> = {
   M15: 5 * 60_000,
@@ -17,16 +19,11 @@ const CANDLE_TTL: Record<Timeframe, number> = {
   H4: 30 * 60_000,
 };
 
-/** Alpha Vantage allows 25 calls a day; 6 hours leaves ample headroom. */
-const NEWS_TTL = 6 * 60 * 60_000;
-
 export const DEFAULT_CANDLE_LIMIT = 300;
 
 export interface MarketCacheIO {
   getCandles: (id: string) => Promise<CachedCandles | undefined>;
   putCandles: (entry: CachedCandles) => Promise<void>;
-  getNews: (limit?: number) => Promise<CachedNews[]>;
-  putNews: (items: CachedNews[]) => Promise<void>;
 }
 
 export function cacheKey(instrumentId: string, timeframe: Timeframe): string {
@@ -50,10 +47,14 @@ async function fetchFromProvider(
   signal?: AbortSignal,
 ): Promise<Candle[]> {
   switch (provider) {
+    case 'dukascopy':
+      return fetchDukascopyCandles(symbol, timeframe, limit, signal);
     case 'binance':
       return fetchBinanceCandles(symbol, timeframe, limit, signal);
-    case 'twelvedata':
-      return fetchTwelveDataCandles(symbol, timeframe, limit, settings.twelveDataKey ?? '', signal);
+    case 'gateio':
+      return fetchGateioCandles(symbol, timeframe, limit, signal);
+    case 'coingecko':
+      return fetchCoinGeckoCandles(symbol, timeframe, limit, signal);
     case 'proxy':
       return fetchProxyCandles(settings.dataProxyUrl ?? '', symbol, timeframe, limit, signal);
     default:
@@ -98,11 +99,7 @@ export async function loadCandles(
     };
   }
 
-  const capabilities = capabilitiesFor(
-    instrumentId,
-    Boolean(settings.twelveDataKey),
-    Boolean(settings.dataProxyUrl),
-  );
+  const capabilities = capabilitiesFor(instrumentId, Boolean(settings.dataProxyUrl));
 
   if (capabilities.length === 0) {
     if (cached) {
@@ -115,7 +112,7 @@ export async function loadCandles(
       };
     }
     throw new MarketDataError(
-      `${instrument.label} tidak punya sumber data gratis dari browser. Isi API key Twelve Data atau data proxy di Settings.`,
+      `${instrument.label} belum punya sumber data. Isi data proxy di Settings untuk mengaktifkannya.`,
       'no-provider',
     );
   }
@@ -174,43 +171,4 @@ export async function loadCandles(
     : new MarketDataError(`Gagal memuat ${instrument.label}.`, 'network');
 }
 
-export interface LoadNewsOptions {
-  force?: boolean;
-  signal?: AbortSignal;
-}
-
-export async function loadNews(
-  settings: AppSettings,
-  io: MarketCacheIO,
-  options: LoadNewsOptions = {},
-): Promise<{ items: NewsItem[]; fetchedAt: number | null; stale: boolean }> {
-  const cached = await io.getNews(200);
-  const newest = cached.reduce((max, item) => Math.max(max, item.fetchedAt), 0);
-  const now = Date.now();
-  const fresh = newest > 0 && now - newest < NEWS_TTL;
-
-  const toItems = (rows: CachedNews[]): NewsItem[] =>
-    rows.map(({ fetchedAt: _fetchedAt, ...item }) => item);
-
-  if (!options.force && fresh) {
-    return { items: toItems(cached), fetchedAt: newest, stale: false };
-  }
-
-  if (!settings.alphaVantageKey) {
-    return { items: toItems(cached), fetchedAt: newest || null, stale: cached.length > 0 };
-  }
-
-  try {
-    const items = await fetchAlphaVantageNews(settings.alphaVantageKey, options.signal);
-    await io.putNews(items.map((item) => ({ ...item, fetchedAt: now })));
-    return { items, fetchedAt: now, stale: false };
-  } catch (error) {
-    if ((error as Error)?.name === 'AbortError') throw error;
-    // Quota exhaustion is the common case here, and yesterday's headlines are
-    // still worth showing.
-    if (cached.length > 0) return { items: toItems(cached), fetchedAt: newest, stale: true };
-    throw error;
-  }
-}
-
-export { CANDLE_TTL, NEWS_TTL };
+export { CANDLE_TTL };

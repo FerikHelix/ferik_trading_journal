@@ -122,15 +122,12 @@ export interface AppSettings {
   theme: ThemePreference;
   currencyDisplay: 'account';
   /**
-   * Market data credentials and preferences. All optional so that settings
-   * rows written before schema v3 keep validating.
+   * Market data preferences. All optional so that settings rows written before
+   * schema v3 keep validating.
    *
-   * The two API keys are deliberately REDACTED from exported backups
-   * (see dataClient.loadSnapshot) — a plain .ftj.json is not an appropriate
-   * place for credentials, even low-value free-tier ones.
+   * There are no API keys here by design: every data source the app uses is
+   * keyless. The one optional field is a proxy the user hosts themselves.
    */
-  twelveDataKey?: string;
-  alphaVantageKey?: string;
   /** User-hosted CORS proxy, e.g. a Cloudflare Worker fronting Yahoo. */
   dataProxyUrl?: string;
   /** Instrument ids shown on Fundamental and scanned for signals. */
@@ -170,17 +167,7 @@ export interface CachedCandles {
   rows: number[][];
 }
 
-export interface CachedNews {
-  id: string;
-  title: string;
-  url: string;
-  source: string;
-  publishedAt: string;
-  summary?: string;
-  sentiment?: number;
-  tags: string[];
-  fetchedAt: number;
-}
+
 
 export interface ImportIssue {
   row: number;

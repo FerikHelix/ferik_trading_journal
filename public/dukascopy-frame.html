@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Market data bridge</title>
+    <meta name="robots" content="noindex" />
+  </head>
+  <body>
+    <!--
+      JSONP bridge, deliberately isolated.
+
+      Dukascopy's public chart feed sends no CORS headers, so it can only be
+      read with a <script> tag. That means running third-party JavaScript — and
+      on the main page that script would sit in the same origin as the
+      IndexedDB holding the entire trading journal.
+
+      This page is loaded in an <iframe sandbox="allow-scripts"> WITHOUT
+      allow-same-origin, so it runs in an opaque origin: no cookies, no
+      localStorage, no IndexedDB, no reach into the parent document. The only
+      way anything leaves here is the postMessage below, which carries plain
+      numbers.
+
+      It is a real file rather than srcdoc so the request still carries a
+      Referer. The upstream endpoint answers 403 when Referer is empty (it does
+      not check *which* origin, only that one is present).
+    -->
+    <script>
+      (() => {
+        const PARENT = window.parent;
+        if (PARENT === window) return;
+
+        let seq = 0;
+
+        function post(message) {
+          // The parent is the only recipient; it verifies event.source.
+          PARENT.postMessage(message, '*');
+        }
+
+        function run(id, url, timeoutMs) {
+          seq += 1;
+          const callback = '__dukCb_' + seq;
+          const script = document.createElement('script');
+          let settled = false;
+
+          const cleanup = () => {
+            try { delete window[callback]; } catch { window[callback] = undefined; }
+            script.remove();
+            window.clearTimeout(timer);
+          };
+
+          const fail = (reason) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            post({ type: 'duk:result', id, error: reason });
+          };
+
+          const timer = window.setTimeout(() => fail('timeout'), timeoutMs || 12000);
+
+          window[callback] = (rows) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            // An unknown interval answers with [null] rather than an error.
+            if (!Array.isArray(rows) || rows.length === 0 || rows[0] === null) {
+              post({ type: 'duk:result', id, error: 'empty' });
+              return;
+            }
+            post({ type: 'duk:result', id, rows });
+          };
+
+          script.onerror = () => fail('network');
+          script.src = url + '&jsonp=' + callback;
+          document.head.append(script);
+        }
+
+        window.addEventListener('message', (event) => {
+          if (event.source !== PARENT) return;
+          const data = event.data;
+          if (!data || data.type !== 'duk:fetch') return;
+          if (typeof data.url !== 'string' || !data.url.startsWith('https://freeserv.dukascopy.com/')) {
+            post({ type: 'duk:result', id: data && data.id, error: 'blocked' });
+            return;
+          }
+          run(data.id, data.url, data.timeoutMs);
+        });
+
+        post({ type: 'duk:ready' });
+      })();
+    </script>
+  </body>
+</html>
