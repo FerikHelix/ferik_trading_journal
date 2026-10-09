@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { BalanceEvent, Deal, ImportIssue, ParsedImport, TradeSide } from '../domain/types';
 import { parseDecimal } from './numbers';
 import { parseBrokerTime } from './time';
+import { sha256Text } from './hash';
 
 export const EXNESS_PARSER_VERSION = 2;
 
@@ -41,6 +42,11 @@ function findHeader(rows: string[][]): number {
   });
 }
 
+export function hasSupportedExnessHeader(text: string): boolean {
+  const matrix = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { skipEmptyLines: 'greedy' });
+  return findHeader(matrix.data) >= 0;
+}
+
 function get(row: Record<string, string>, names: readonly string[]): string {
   for (const alias of names) {
     const value = row[cleanHeader(alias)];
@@ -62,11 +68,6 @@ function balanceType(type: string, comment: string, amount: string): BalanceEven
   if (text.includes('withdraw') || text.includes('penarikan')) return 'withdrawal';
   if (text.includes('deposit') || text.includes('balance')) return Number(amount) < 0 ? 'withdrawal' : 'deposit';
   return 'other';
-}
-
-export async function sha256Text(text: string): Promise<string> {
-  const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /** Parse an Exness MT5 deal-history or closed-order CSV without uploading it. */

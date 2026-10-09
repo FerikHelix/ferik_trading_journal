@@ -3,6 +3,15 @@ export type TradeSide = 'buy' | 'sell';
 export type DealEvent = 'entry' | 'exit' | 'balance' | 'unknown';
 export type PositionStatus = 'closed' | 'open';
 export type ThemePreference = 'light' | 'dark' | 'system';
+export type ImportSourceFormat = 'exness-csv' | 'mt5-xlsx';
+
+export interface DetectedAccountMetadata {
+  label: string;
+  accountNumber: string;
+  server: string;
+  currency: string;
+  sourceTimeZone: string;
+}
 
 export interface Account {
   id: string;
@@ -25,6 +34,7 @@ export interface ImportBatch {
   duplicates: number;
   failed: number;
   parserVersion: number;
+  sourceFormat?: ImportSourceFormat;
 }
 
 export interface Deal {
@@ -138,4 +148,11 @@ export interface ParsedImport {
   issues: ImportIssue[];
   preview: Record<string, string>[];
   fileHash: string;
+}
+
+export interface ImportPreview extends ParsedImport {
+  sourceFormat: ImportSourceFormat;
+  sourceLabel: string;
+  parserVersion: number;
+  detectedAccount?: DetectedAccountMetadata;
 }
