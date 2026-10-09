@@ -85,38 +85,11 @@ not catch either mistake:
 `useSyncExternalStore` does not exist in `preact/hooks`; `useActiveAccount`
 uses a plain subscription instead.
 
-## Market data
+## Offline-first architecture
 
-All fetching happens in the browser. There is no backend, no scheduled job and
-**no API keys anywhere** — every source is keyless or user-hosted.
-
-`src/lib/market/client.ts` is cache-first against IndexedDB and returns stale
-cached candles rather than throwing when a provider fails. Providers are
-selected per instrument in `src/lib/market/instruments.ts`.
-
-Only sources that send `Access-Control-Allow-Origin` can be fetched. Yahoo
-Finance, GDELT and every finance RSS feed do not, which is why there is no news
-feed at all and why silver and oil have only one source.
-
-**Dukascopy is the exception and needs care.** It is the only free source
-carrying silver, crude oil and every forex major, but it has no CORS, so it is
-read over JSONP — third-party JavaScript. That script runs inside
-`public/dukascopy-frame.html`, loaded in an `<iframe sandbox="allow-scripts">`
-with no `allow-same-origin`, so it sits in an opaque origin and cannot reach the
-IndexedDB holding the trading journal. Keep it that way. The frame is a real
-file rather than `srcdoc` because the endpoint 403s without a `Referer`.
-
-`providers/dukascopy.ts` has a circuit breaker persisted in `sessionStorage`.
-It exists because an unreachable host hangs until it times out, and this is a
-multi-page app — without persistence the timeout is paid again on every
-navigation. It takes two consecutive network failures to trip, because a single
-hiccup must not disable the only source of silver, oil and the forex majors.
-
-Known gap: Dukascopy lists GBPUSD but returns no candles for it, so it is kept
-out of the default watchlist.
-
-Prices use `number`, unlike account money which is `DecimalString`. See the note
-at the top of `src/lib/market/types.ts` before changing that.
+All journal storage and analytics happen entirely in the browser using IndexedDB
+(`ferik-trading-journal`). There is no backend, no telemetry, no tracking, and
+no external API dependencies. The app runs completely offline.
 
 ## Testing
 
