@@ -32,3 +32,6 @@ test-results/
 
 # jetbrains setting folder
 .idea/
+
+# superpowers scratch
+.superpowers/
