@@ -31,6 +31,14 @@ describe('backup', () => {
     expect(parseBackup(JSON.stringify(legacy)).weeklyReviews).toEqual([]);
   });
 
+  it('preserves new import source metadata and accepts legacy batches without it', () => {
+    const batch = { id: 'i', accountId: 'a', fileName: 'history.xlsx', fileHash: 'abc', importedAt: '2026-09-10T00:00:00.000Z', inserted: 2, duplicates: 0, failed: 0, parserVersion: 1, sourceFormat: 'mt5-xlsx' as const };
+    expect(parseBackup(serializeBackup({ ...snapshot, importBatches: [batch] })).importBatches[0]?.sourceFormat).toBe('mt5-xlsx');
+    const legacy = { ...batch } as Record<string, unknown>;
+    delete legacy.sourceFormat;
+    expect(parseBackup(JSON.stringify({ ...snapshot, importBatches: [legacy] })).importBatches[0]?.sourceFormat).toBeUndefined();
+  });
+
   it('round-trips AES-GCM encryption and safely rejects a wrong password', async () => {
     const encrypted = await encryptBackup(snapshot, 'correct horse battery staple');
     expect(await decryptBackup(encrypted, 'correct horse battery staple')).toEqual(snapshot);

@@ -1,4 +1,5 @@
 export * from './aggregate';
+export * from './accounts';
 export * from './detect';
 export * from './file';
 export * from './hash';

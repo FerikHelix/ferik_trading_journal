@@ -1,8 +1,14 @@
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearAllData, createAccount, db, getWeeklyReview, importParsedData, TradingJournalDatabase, upsertJournal, upsertWeeklyReview } from '../../src/lib/db/database';
-import { aggregatePositions, parseDecimal, parseExnessCsv } from '../../src/lib/import';
-import type { Deal } from '../../src/lib/domain/types';
+import { aggregatePositions, findMatchingAccount, parseDecimal, parseExnessCsv, parseMt5Workbook } from '../../src/lib/import';
+import type { Account, Deal, ImportPreview, ParsedImport } from '../../src/lib/domain/types';
+import { makeMt5Workbook } from '../fixtures/mt5Workbook';
+
+const asPreview = (parsed: ParsedImport, overrides: Partial<ImportPreview> = {}): ImportPreview => ({
+  ...parsed, sourceFormat: 'exness-csv', sourceLabel: 'Exness CSV', parserVersion: 2, ...overrides,
+});
+const asArrayBuffer = (bytes: Uint8Array) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 
 describe('Exness MT5 CSV parser', () => {
   it('handles BOM, semicolon CSV, European decimals, balance rows, and invalid rows', async () => {
@@ -111,36 +117,89 @@ describe('Dexie schema', () => {
   });
 });
 
+describe('import account resolution', () => {
+  const accounts: Account[] = [
+    { id: 'a', label: 'Vantage Main', accountNumber: '123', platform: 'MT5', server: 'Broker-Live', currency: 'USD', sourceTimeZone: 'UTC', createdAt: '2026-01-01T00:00:00Z' },
+    { id: 'b', label: 'No Number', accountNumber: '', platform: 'MT5', server: 'Other-Live', currency: 'USD', sourceTimeZone: 'UTC', createdAt: '2026-01-01T00:00:00Z' },
+  ];
+
+  it('matches account number and server without case or whitespace sensitivity', () => {
+    expect(findMatchingAccount(accounts, { label: 'Different', accountNumber: ' 123 ', server: ' broker-live ', currency: 'USD', sourceTimeZone: 'UTC' })?.id).toBe('a');
+    expect(findMatchingAccount(accounts, { label: 'Vantage Main', accountNumber: '123', server: 'another-server', currency: 'USD', sourceTimeZone: 'UTC' })).toBeUndefined();
+  });
+
+  it('falls back to label and server only when account number is absent', () => {
+    expect(findMatchingAccount(accounts, { label: ' no number ', accountNumber: '', server: 'OTHER-LIVE', currency: 'USD', sourceTimeZone: 'UTC' })?.id).toBe('b');
+    expect(findMatchingAccount(accounts, { label: 'No Number', accountNumber: '999', server: 'Other-Live', currency: 'USD', sourceTimeZone: 'UTC' })).toBeUndefined();
+  });
+});
+
 describe('atomic import workflow', () => {
   beforeEach(async () => clearAllData());
-  afterEach(async () => clearAllData());
+  afterEach(async () => { vi.restoreAllMocks(); await clearAllData(); });
+
+  it('allows an empty account number but requires label, server, and currency', async () => {
+    const account = await createAccount({ label: 'Manual', accountNumber: '', server: 'Broker-Live', currency: 'USD', sourceTimeZone: 'UTC' });
+    expect(account).toMatchObject({ accountNumber: '', server: 'Broker-Live', platform: 'MT5' });
+    await expect(createAccount({ label: 'Manual', accountNumber: '', server: '', currency: 'USD', sourceTimeZone: 'UTC' })).rejects.toThrow('server');
+  });
 
   it('deduplicates a repeated file and retains journals on later imports', async () => {
-    const account = await createAccount({ label: 'Utama', accountNumber: '123', currency: 'USD', sourceTimeZone: 'UTC' });
+    const account = await createAccount({ label: 'Utama', accountNumber: '123', server: 'Exness-Live', currency: 'USD', sourceTimeZone: 'UTC' });
     const csv = 'Deal,Order,Position ID,Time,Type,Entry,Symbol,Volume,Price,Commission,Swap,Profit\n'
       + '1,10,99,2026.09.01 10:00:00,Buy,In,EURUSD,1,1.1,-1,0,0\n'
       + '2,10,99,2026.09.01 11:00:00,Sell,Out,EURUSD,1,1.2,-1,-0.5,10';
     const parsed = await parseExnessCsv(csv, account.id, 'UTC');
-    const first = await importParsedData(account.id, 'history.csv', parsed);
+    const first = await importParsedData({ kind: 'existing', accountId: account.id }, 'history.csv', asPreview(parsed));
     expect(first).toMatchObject({ inserted: 2, duplicates: 0, alreadyImported: false });
     expect(first.positions[0]).toMatchObject({ status: 'closed', netProfit: '7.5' });
     await upsertJournal({ positionId: first.positions[0].id, strategy: 'breakout' });
-    const repeated = await importParsedData(account.id, 'history-copy.csv', parsed);
+    const repeated = await importParsedData({ kind: 'existing', accountId: account.id }, 'history-copy.csv', asPreview(parsed));
     expect(repeated).toMatchObject({ inserted: 0, duplicates: 2, alreadyImported: true });
     expect(await db.journals.where('positionId').equals(first.positions[0].id).count()).toBe(1);
   });
 
   it('allows the same broker ticket in separate accounts', async () => {
-    const a = await createAccount({ label: 'A', accountNumber: '1', currency: 'USD', sourceTimeZone: 'UTC' });
-    const b = await createAccount({ label: 'B', accountNumber: '2', currency: 'USD', sourceTimeZone: 'UTC' });
+    const a = await createAccount({ label: 'A', accountNumber: '1', server: 'A-Live', currency: 'USD', sourceTimeZone: 'UTC' });
+    const b = await createAccount({ label: 'B', accountNumber: '2', server: 'B-Live', currency: 'USD', sourceTimeZone: 'UTC' });
     const csv = 'Deal,Order,Position ID,Time,Type,Entry,Symbol,Volume,Price,Profit\n1,1,1,2026.09.01 10:00:00,Buy,In,EURUSD,1,1.1,0';
-    await importParsedData(a.id, 'a.csv', await parseExnessCsv(csv, a.id, 'UTC'));
-    await importParsedData(b.id, 'b.csv', await parseExnessCsv(csv, b.id, 'UTC'));
+    await importParsedData({ kind: 'existing', accountId: a.id }, 'a.csv', asPreview(await parseExnessCsv(csv, a.id, 'UTC')));
+    await importParsedData({ kind: 'existing', accountId: b.id }, 'b.csv', asPreview(await parseExnessCsv(csv, b.id, 'UTC')));
     expect(await db.deals.count()).toBe(2);
   });
 
+  it('creates an account and imports its records in one operation', async () => {
+    const parsed = await parseMt5Workbook(asArrayBuffer(makeMt5Workbook()), 'UTC');
+    const result = await importParsedData({ kind: 'new', account: { label: 'Example', accountNumber: '', server: 'Broker-Live', currency: 'USD', sourceTimeZone: 'UTC' } }, 'history.xlsx', parsed);
+    expect(result.account).toMatchObject({ label: 'Example', accountNumber: '', server: 'Broker-Live' });
+    expect(await db.accounts.get(result.account.id)).toEqual(result.account);
+    expect(result.inserted).toBe(3);
+  });
+
+  it('deduplicates overlapping MT5 reports and preserves journals', async () => {
+    const firstPreview = await parseMt5Workbook(asArrayBuffer(makeMt5Workbook()), 'UTC');
+    const first = await importParsedData({ kind: 'new', account: { label: 'Example', server: 'Broker-Live', currency: 'USD', sourceTimeZone: 'UTC' } }, 'first.xlsx', firstPreview);
+    const position = first.positions.find((item) => item.positionId === '501')!;
+    await upsertJournal({ positionId: position.id, strategy: 'breakout' });
+    const extra = { ...firstPreview.deals[0], id: 'preview:mt5-position:503', ticketId: 'mt5-position:503', orderId: '503', positionId: '503', sourceRow: 99 };
+    const overlap = { ...firstPreview, fileHash: 'b'.repeat(64), deals: [...firstPreview.deals, extra] };
+
+    const second = await importParsedData({ kind: 'existing', accountId: first.account.id }, 'second.xlsx', overlap);
+    expect(second).toMatchObject({ inserted: 1, duplicates: 3, alreadyImported: false });
+    expect(second.positions).toHaveLength(3);
+    expect(await db.journals.where('positionId').equals(position.id).count()).toBe(1);
+  });
+
+  it('rolls back a new account when record persistence fails', async () => {
+    const parsed = await parseMt5Workbook(asArrayBuffer(makeMt5Workbook()), 'UTC');
+    vi.spyOn(db.deals, 'bulkAdd').mockRejectedValueOnce(new Error('forced failure'));
+    await expect(importParsedData({ kind: 'new', account: { label: 'Rollback', server: 'Broker-Live', currency: 'USD', sourceTimeZone: 'UTC' } }, 'history.xlsx', parsed)).rejects.toThrow('forced failure');
+    expect(await db.accounts.filter((account) => account.label === 'Rollback').count()).toBe(0);
+    expect(await db.importBatches.count()).toBe(0);
+  });
+
   it('upserts a weekly review without affecting trading data', async () => {
-    const account = await createAccount({ label: 'A', accountNumber: '1', currency: 'USD', sourceTimeZone: 'UTC' });
+    const account = await createAccount({ label: 'A', accountNumber: '1', server: 'A-Live', currency: 'USD', sourceTimeZone: 'UTC' });
     await upsertWeeklyReview({ accountId: account.id, weekStart: '2026-09-07T00:00:00.000Z', weekEnd: '2026-09-13T23:59:59.999Z', lesson: 'Sabar' });
     const stored = await getWeeklyReview(account.id, '2026-09-07T00:00:00.000Z');
     expect(stored?.lesson).toBe('Sabar');

@@ -1,10 +1,9 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type {
   Account, AppSettings, BalanceEvent, Deal, ImportBatch, Journal,
-  ParsedImport, Position, WeeklyReview,
+  ImportPreview, Position, WeeklyReview,
 } from '../domain/types';
 import { aggregatePositions } from '../import/aggregate';
-import { EXNESS_PARSER_VERSION } from '../import/parser';
 
 export class TradingJournalDatabase extends Dexie {
   accounts!: EntityTable<Account, 'id'>;
@@ -66,16 +65,21 @@ export const db = new TradingJournalDatabase();
 
 const id = (prefix: string) => `${prefix}_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
 
-export type NewAccount = Pick<Account, 'label' | 'accountNumber' | 'currency' | 'sourceTimeZone'>
-  & Partial<Pick<Account, 'id' | 'server' | 'createdAt'>>;
+export type NewAccount = Pick<Account, 'label' | 'server' | 'currency' | 'sourceTimeZone'>
+  & Partial<Pick<Account, 'id' | 'accountNumber' | 'createdAt'>>;
 
-export async function createAccount(input: NewAccount): Promise<Account> {
+function buildAccount(input: NewAccount): Account {
   const account: Account = {
-    id: input.id ?? id('account'), label: input.label.trim(), accountNumber: input.accountNumber.trim(),
-    platform: 'MT5', server: input.server?.trim() ?? '', currency: input.currency.trim().toUpperCase(),
+    id: input.id ?? id('account'), label: input.label.trim(), accountNumber: input.accountNumber?.trim() ?? '',
+    platform: 'MT5', server: input.server.trim(), currency: input.currency.trim().toUpperCase(),
     sourceTimeZone: input.sourceTimeZone, createdAt: input.createdAt ?? new Date().toISOString(),
   };
-  if (!account.label || !account.accountNumber || !account.currency) throw new Error('Label, nomor akun, dan currency wajib diisi.');
+  if (!account.label || !account.server || !account.currency) throw new Error('Label, server, dan currency wajib diisi.');
+  return account;
+}
+
+export async function createAccount(input: NewAccount): Promise<Account> {
+  const account = buildAccount(input);
   await db.accounts.add(account);
   return account;
 }
@@ -150,6 +154,7 @@ export async function upsertWeeklyReview(input: WeeklyReviewInput): Promise<Week
 }
 
 export interface ImportCommitResult {
+  account: Account;
   batch?: ImportBatch;
   inserted: number;
   duplicates: number;
@@ -158,20 +163,34 @@ export interface ImportCommitResult {
   positions: Position[];
 }
 
+export type ImportAccountTarget =
+  | { kind: 'existing'; accountId: string }
+  | { kind: 'new'; account: NewAccount };
+
 function uniqueById<T extends { id: string }>(records: T[]): T[] {
   return [...new Map(records.map((record) => [record.id, record])).values()];
 }
 
 export async function importParsedData(
-  accountId: string,
+  target: ImportAccountTarget,
   fileName: string,
-  parsed: ParsedImport,
+  parsed: ImportPreview,
 ): Promise<ImportCommitResult> {
   return db.transaction('rw', db.accounts, db.importBatches, db.deals, db.balanceEvents, db.positions, async () => {
-    if (!await db.accounts.get(accountId)) throw new Error('Akun tujuan import tidak ditemukan.');
+    let account: Account;
+    if (target.kind === 'existing') {
+      const existing = await db.accounts.get(target.accountId);
+      if (!existing) throw new Error('Akun tujuan import tidak ditemukan.');
+      account = existing;
+    } else {
+      account = buildAccount(target.account);
+      await db.accounts.add(account);
+    }
+    const accountId = account.id;
     const prior = await db.importBatches.where('[accountId+fileHash]').equals([accountId, parsed.fileHash]).first();
     if (prior) {
       return {
+        account,
         batch: prior, inserted: 0, duplicates: parsed.deals.length + parsed.balanceEvents.length,
         failed: parsed.issues.filter((issue) => issue.severity === 'error').length,
         alreadyImported: true, positions: await db.positions.where('accountId').equals(accountId).toArray(),
@@ -189,7 +208,8 @@ export async function importParsedData(
     const failed = parsed.issues.filter((issue) => issue.severity === 'error').length;
     const batch: ImportBatch = {
       id: id('import'), accountId, fileName, fileHash: parsed.fileHash, importedAt: new Date().toISOString(),
-      inserted: newDeals.length + newBalances.length, duplicates, failed, parserVersion: EXNESS_PARSER_VERSION,
+      inserted: newDeals.length + newBalances.length, duplicates, failed,
+      parserVersion: parsed.parserVersion, sourceFormat: parsed.sourceFormat,
     };
     newDeals.forEach((deal) => { deal.importBatchId = batch.id; });
     newBalances.forEach((event) => { event.importBatchId = batch.id; });
@@ -201,7 +221,7 @@ export async function importParsedData(
     const oldPositionIds = (await db.positions.where('accountId').equals(accountId).primaryKeys()) as string[];
     await db.positions.bulkDelete(oldPositionIds);
     await db.positions.bulkPut(positions);
-    return { batch, inserted: batch.inserted, duplicates, failed, alreadyImported: false, positions };
+    return { account, batch, inserted: batch.inserted, duplicates, failed, alreadyImported: false, positions };
   });
 }
 

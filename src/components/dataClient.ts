@@ -1,6 +1,6 @@
 import type { Account, AppSettings, Journal, Position, Deal, ParsedImport, WeeklyReview } from '../lib/domain/types';
 import { db, clearAllData, createAccount, getAccounts, getAppSettings, getJournals, getPositions, getPositionWithDeals, getWeeklyReview, importParsedData, updateThemePreference, upsertJournal, upsertWeeklyReview, type ImportCommitResult } from '../lib/db';
-import { parseExnessCsv } from '../lib/import';
+import { EXNESS_PARSER_VERSION, parseExnessCsv } from '../lib/import';
 import type { BackupSnapshot } from '../lib/backup';
 
 export async function loadAccounts(): Promise<Account[]> {
@@ -50,7 +50,12 @@ export async function previewCsv(file: File, account: Account): Promise<ParsedIm
 }
 
 export async function commitCsv(parsed: ParsedImport, account: Account, fileName: string): Promise<ImportCommitResult> {
-  return importParsedData(account.id, fileName, parsed);
+  return importParsedData({ kind: 'existing', accountId: account.id }, fileName, {
+    ...parsed,
+    sourceFormat: 'exness-csv',
+    sourceLabel: 'Exness CSV',
+    parserVersion: EXNESS_PARSER_VERSION,
+  });
 }
 
 export async function loadSnapshot(): Promise<BackupSnapshot> {
