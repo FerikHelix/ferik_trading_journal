@@ -35,9 +35,10 @@ describe('navigation', () => {
     expect(findNav('does-not-exist')).toBeNull();
   });
 
-  it('exposes the market section as first-class navigation', () => {
-    const market = NAV_GROUPS.find((group) => group.id === 'market');
-    expect(market?.items.map((item) => item.id)).toEqual(['fundamental', 'signals']);
+  it('groups items into home, journal, and system sections', () => {
+    expect(NAV_GROUPS.map((group) => group.id)).toEqual(['home', 'journal', 'system']);
+    const journal = NAV_GROUPS.find((group) => group.id === 'journal');
+    expect(journal?.items.map((item) => item.id)).toEqual(['trades', 'journal', 'analytics', 'review']);
   });
 
   it('keeps the mobile bar small enough to stay tappable', () => {
@@ -47,7 +48,7 @@ describe('navigation', () => {
 
   it('joins hrefs onto the deploy base path without doubling slashes', () => {
     expect(navHref('/ferik_trading_journal/', '')).toBe('/ferik_trading_journal/');
-    expect(navHref('/ferik_trading_journal/', 'signals/')).toBe('/ferik_trading_journal/signals/');
+    expect(navHref('/ferik_trading_journal/', 'trades/')).toBe('/ferik_trading_journal/trades/');
     expect(navHref('/', 'trades/')).toBe('/trades/');
   });
 });

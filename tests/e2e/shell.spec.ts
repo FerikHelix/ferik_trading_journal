@@ -1,18 +1,18 @@
 import { expect, test } from './fixtures';
 
-test('sidebar groups every section and reaches the new market pages', async ({ page }) => {
+test('sidebar groups every section and reaches core journal pages', async ({ page }) => {
   await page.goto('/');
 
   const sidebar = page.locator('.sidebar');
   // Scoped to the group heading: 'Jurnal' is also a nav item label.
   const headings = sidebar.locator('.nav__label');
-  await expect(headings).toHaveText(['Market', 'Jurnal', 'Sistem']);
+  await expect(headings).toHaveText(['Jurnal', 'Sistem']);
 
-  await sidebar.getByRole('link', { name: 'Fundamental' }).click();
-  await expect(page.getByRole('heading', { name: 'Fundamental', level: 1 })).toBeVisible();
+  await sidebar.getByRole('link', { name: 'Trades' }).click();
+  await expect(page.getByRole('heading', { name: 'Riwayat trading', level: 1 })).toBeVisible();
 
-  await page.locator('.sidebar').getByRole('link', { name: 'Signals' }).click();
-  await expect(page.getByRole('heading', { name: 'Signals', level: 1 })).toBeVisible();
+  await page.locator('.sidebar').getByRole('link', { name: 'Settings' }).click();
+  await expect(page.getByRole('heading', { name: 'Settings & backup', level: 1 })).toBeVisible();
 });
 
 test('topbar breadcrumb names the section and the page', async ({ page }) => {
@@ -23,7 +23,7 @@ test('topbar breadcrumb names the section and the page', async ({ page }) => {
 });
 
 test('every route responds and renders its shell', async ({ page }) => {
-  const routes = ['', 'fundamental/', 'signals/', 'trades/', 'journal/', 'analytics/', 'review/', 'import/', 'settings/'];
+  const routes = ['', 'trades/', 'journal/', 'analytics/', 'review/', 'import/', 'settings/'];
   for (const route of routes) {
     const response = await page.goto(`/${route}`);
     expect(response?.ok(), `/${route} should respond 200`).toBeTruthy();

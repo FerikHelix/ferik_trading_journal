@@ -2,7 +2,6 @@
 import Icon from '../ui/Icon.astro';
 import ThemeToggle from '../ThemeToggle';
 import AccountSwitcher from '../AccountSwitcher';
-import AlertBell from '../AlertBell';
 
 interface Props { groupLabel: string | null; pageLabel: string; }
 const { groupLabel, pageLabel } = Astro.props;
@@ -24,7 +23,6 @@ const { groupLabel, pageLabel } = Astro.props;
 
   <div class="topbar__actions">
     <AccountSwitcher client:load />
-    <AlertBell client:load />
     <ThemeToggle client:load />
   </div>
 </header>

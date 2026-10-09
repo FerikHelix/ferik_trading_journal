@@ -30,20 +30,12 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: 'market',
-    label: 'Market',
-    items: [
-      { id: 'fundamental', label: 'Fundamental', title: 'Fundamental', path: 'fundamental/', icon: 'globe', mobile: true },
-      { id: 'signals', label: 'Signals', title: 'Signals', path: 'signals/', icon: 'radar', mobile: true },
-    ],
-  },
-  {
     id: 'journal',
     label: 'Jurnal',
     items: [
       { id: 'trades', label: 'Trades', title: 'Riwayat trading', path: 'trades/', icon: 'list', mobile: true },
       { id: 'journal', label: 'Jurnal', title: 'Jurnal posisi', path: 'journal/', icon: 'notebook-pen', mobile: true },
-      { id: 'analytics', label: 'Analytics', title: 'Trading analytics', path: 'analytics/', icon: 'bar-chart' },
+      { id: 'analytics', label: 'Analytics', title: 'Trading analytics', path: 'analytics/', icon: 'bar-chart', mobile: true },
       { id: 'review', label: 'Weekly Review', title: 'Weekly Review', path: 'review/', icon: 'calendar-check' },
     ],
   },
@@ -51,7 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'system',
     label: 'Sistem',
     items: [
-      { id: 'import', label: 'Import', title: 'Import riwayat Exness', path: 'import/', icon: 'upload' },
+      { id: 'import', label: 'Import', title: 'Import riwayat Exness', path: 'import/', icon: 'upload', mobile: true },
       { id: 'settings', label: 'Settings', title: 'Settings & backup', path: 'settings/', icon: 'settings' },
     ],
   },
