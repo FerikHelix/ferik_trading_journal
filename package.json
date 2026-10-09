@@ -24,6 +24,7 @@
     "lightweight-charts": "^5.2.1",
     "papaparse": "^5.7.0",
     "preact": "^10.29.8",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.6.1"
   },
   "allowScripts": {
