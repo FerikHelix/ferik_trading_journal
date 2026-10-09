@@ -121,50 +121,6 @@ export interface AppSettings {
   displayTimeZone: string;
   theme: ThemePreference;
   currencyDisplay: 'account';
-  /**
-   * Market data preferences. All optional so that settings rows written before
-   * schema v3 keep validating.
-   *
-   * There are no API keys here by design: every data source the app uses is
-   * keyless. The one optional field is a proxy the user hosts themselves.
-   */
-  /** User-hosted CORS proxy, e.g. a Cloudflare Worker fronting Yahoo. */
-  dataProxyUrl?: string;
-  /** Instrument ids shown on Fundamental and scanned for signals. */
-  watchlist?: string[];
-  signalTimeframe?: MarketTimeframe;
-  /** Whether the browser Notification API may be used for signal alerts. */
-  desktopNotifications?: boolean;
-}
-
-/** Mirrors lib/market Timeframe without importing it (keeps domain leaf-level). */
-export type MarketTimeframe = 'M15' | 'H1' | 'H4';
-
-export interface SignalAlert {
-  id: string;
-  instrumentId: string;
-  timeframe: MarketTimeframe;
-  direction: 'bullish' | 'bearish';
-  status: 'approaching' | 'touched';
-  /** Zone bounds at the moment the alert fired. */
-  top: number;
-  bottom: number;
-  price: number;
-  createdAt: string;
-  seenAt?: string;
-}
-
-export interface CachedCandles {
-  /** `${instrumentId}:${timeframe}` */
-  id: string;
-  instrumentId: string;
-  timeframe: MarketTimeframe;
-  provider: string;
-  proxied: boolean;
-  proxyNote?: string;
-  fetchedAt: number;
-  /** Stored as [t,o,h,l,c] tuples — object-per-candle roughly triples the size. */
-  rows: number[][];
 }
 
 

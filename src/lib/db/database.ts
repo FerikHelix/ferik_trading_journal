@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type {
-  Account, AppSettings, BalanceEvent, CachedCandles, Deal, ImportBatch, Journal,
-  ParsedImport, Position, SignalAlert, WeeklyReview,
+  Account, AppSettings, BalanceEvent, Deal, ImportBatch, Journal,
+  ParsedImport, Position, WeeklyReview,
 } from '../domain/types';
 import { aggregatePositions } from '../import/aggregate';
 import { EXNESS_PARSER_VERSION } from '../import/parser';
@@ -15,8 +15,6 @@ export class TradingJournalDatabase extends Dexie {
   weeklyReviews!: EntityTable<WeeklyReview, 'id'>;
   balanceEvents!: EntityTable<BalanceEvent, 'id'>;
   settings!: EntityTable<AppSettings, 'id'>;
-  marketCandles!: EntityTable<CachedCandles, 'id'>;
-  signalAlerts!: EntityTable<SignalAlert, 'id'>;
 
   /**
    * The database name is load-bearing: changing it does not migrate anything,
@@ -49,6 +47,9 @@ export class TradingJournalDatabase extends Dexie {
     // the feature was removed rather than left half-working. `null` tells Dexie
     // to delete the table instead of creating it.
     this.version(4).stores({ marketNews: null });
+    // v5 drops marketCandles and signalAlerts as the application is simplified
+    // back to a core trading journal with zero external market polling.
+    this.version(5).stores({ marketCandles: null, signalAlerts: null });
     this.on('populate', () => this.settings.add(defaultSettings()));
   }
 }
@@ -226,53 +227,3 @@ export async function clearAllData(): Promise<void> {
   await db.settings.put(defaultSettings());
 }
 
-/* ------------------------------------------------------------------ market */
-
-export async function updateMarketSettings(
-  patch: Partial<Pick<AppSettings,
-    'dataProxyUrl' | 'watchlist' | 'signalTimeframe' | 'desktopNotifications'>>,
-): Promise<AppSettings> {
-  const settings = { ...await getAppSettings(), ...patch };
-  await db.settings.put(settings);
-  return settings;
-}
-
-export async function getCachedCandles(id: string): Promise<CachedCandles | undefined> {
-  return db.marketCandles.get(id);
-}
-
-export async function putCachedCandles(entry: CachedCandles): Promise<void> {
-  await db.marketCandles.put(entry);
-}
-
-export async function getSignalAlerts(limit = 50): Promise<SignalAlert[]> {
-  return db.signalAlerts.orderBy('createdAt').reverse().limit(limit).toArray();
-}
-
-/**
- * Adds only alerts whose id is not already stored, so reopening the app does
- * not re-raise the same zone touch over and over. Returns the ones that were
- * genuinely new, which is what the notification layer should announce.
- */
-export async function addSignalAlerts(alerts: SignalAlert[]): Promise<SignalAlert[]> {
-  if (alerts.length === 0) return [];
-  const existing = await db.signalAlerts.bulkGet(alerts.map((alert) => alert.id));
-  const fresh = alerts.filter((_, index) => !existing[index]);
-  if (fresh.length) await db.signalAlerts.bulkAdd(fresh);
-  return fresh;
-}
-
-export async function markAlertsSeen(ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
-  const seenAt = new Date().toISOString();
-  await db.transaction('rw', db.signalAlerts, async () => {
-    for (const id of ids) await db.signalAlerts.update(id, { seenAt });
-  });
-}
-
-/** Market caches only — never touches trades, journals or reviews. */
-export async function clearMarketCache(): Promise<void> {
-  await db.transaction('rw', db.marketCandles, db.signalAlerts, async () => {
-    await Promise.all([db.marketCandles.clear(), db.signalAlerts.clear()]);
-  });
-}
