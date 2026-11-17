@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aggregatePositions, parseMt5Workbook, parseTradeHistoryFile } from '../../src/lib/import';
-import { makeMt5Workbook } from '../fixtures/mt5Workbook';
+import { makeMt5CsvText, makeMt5Workbook } from '../fixtures/mt5Workbook';
 
 const asArrayBuffer = (bytes: Uint8Array) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 
@@ -76,11 +76,35 @@ describe('trade history file dispatcher', () => {
     await expect(parseTradeHistoryFile(csv, 'UTC')).resolves.toMatchObject({ sourceFormat: 'exness-csv', sourceLabel: 'Exness CSV', parserVersion: 2 });
   });
 
+  it('detects a workbook by content even when it is named .csv', async () => {
+    const renamed = new File([asArrayBuffer(makeMt5Workbook())], 'history.csv', { type: 'text/csv' });
+    await expect(parseTradeHistoryFile(renamed, 'UTC')).resolves.toMatchObject({ sourceFormat: 'mt5-xlsx' });
+  });
+
+  it('parses the same report saved as CSV, with the same metadata and totals', async () => {
+    const csv = new File([makeMt5CsvText()], 'history.csv', { type: 'text/csv' });
+    const preview = await parseTradeHistoryFile(csv, 'UTC');
+    expect(preview).toMatchObject({
+      sourceFormat: 'mt5-csv',
+      sourceLabel: 'MT5 CSV',
+      parserVersion: 1,
+      detectedAccount: { accountNumber: '123456', server: 'Broker-Live', currency: 'USD' },
+    });
+    expect(preview.deals.map((deal) => deal.positionId)).toEqual(['501', '502']);
+    expect(preview.balanceEvents).toHaveLength(1);
+    expect(aggregatePositions(preview.deals).map((position) => position.netProfit)).toEqual(['18.5', '-10.5']);
+  });
+
   it('rejects corrupt ZIP bytes and unrelated text with neutral errors', async () => {
     const corrupt = new File([Uint8Array.of(0x50, 0x4b, 0x03, 0x04, 1, 2, 3)], 'broken.xlsx');
     const unrelated = new File(['name,value\na,b'], 'other.csv', { type: 'text/csv' });
 
     await expect(parseTradeHistoryFile(corrupt, 'UTC')).rejects.toThrow('Workbook MT5 tidak dapat dibaca');
     await expect(parseTradeHistoryFile(unrelated, 'UTC')).rejects.toThrow('Format file tidak didukung');
+  });
+
+  it('rejects an MT5 report CSV whose Positions header is missing', async () => {
+    const broken = new File([makeMt5CsvText({ omitPositionsHeader: true })], 'history.csv', { type: 'text/csv' });
+    await expect(parseTradeHistoryFile(broken, 'UTC')).rejects.toThrow('CSV report MT5 tidak dapat dibaca');
   });
 });

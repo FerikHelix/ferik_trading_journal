@@ -15,6 +15,8 @@ const { active, base } = Astro.props;
       class:list={['mobile-nav__link', { 'is-active': active === item.id }]}
       href={navHref(base, item.path)}
       aria-current={active === item.id ? 'page' : undefined}
+      data-requires={item.requires}
+      hidden={item.requires === 'propfirm'}
     >
       <Icon name={item.icon} size={19} />
       <span>{item.label}</span>

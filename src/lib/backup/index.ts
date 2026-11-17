@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import Decimal from 'decimal.js';
-import type { Account, AppSettings, BalanceEvent, Deal, ImportBatch, Journal, Position, WeeklyReview } from '../domain/types';
+import type { Account, AppSettings, BalanceEvent, Deal, ImportBatch, Journal, Plan, Position, Session, WeeklyReview } from '../domain/types';
 
-export const BACKUP_SCHEMA_VERSION = 1;
+/**
+ * 2 adds prop firm desks: `plans`, `sessions`, and the desk fields on accounts.
+ * Version 1 payloads are still accepted and restored as personal desks with no
+ * starting balance, because that is what they were.
+ */
+export const BACKUP_SCHEMA_VERSION = 2;
 export const PBKDF2_ITERATIONS = 600_000;
 
 export interface BackupSnapshot {
@@ -15,6 +20,8 @@ export interface BackupSnapshot {
   journals: Journal[];
   weeklyReviews: WeeklyReview[];
   balanceEvents: BalanceEvent[];
+  plans: Plan[];
+  sessions: Session[];
   settings: AppSettings[];
 }
 
@@ -34,13 +41,37 @@ const decimalString = z.string().refine((value) => {
   try { return new Decimal(value).isFinite(); } catch { return false; }
 }, 'Nilai desimal tidak valid');
 const isoString = z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Tanggal tidak valid');
-const accountSchema = z.object({ id: z.string(), label: z.string(), accountNumber: z.string(), platform: z.literal('MT5'), server: z.string(), currency: z.string(), sourceTimeZone: z.string(), createdAt: isoString });
-const importBatchSchema = z.object({ id: z.string(), accountId: z.string(), fileName: z.string(), fileHash: z.string(), importedAt: isoString, inserted: z.number().int().nonnegative(), duplicates: z.number().int().nonnegative(), failed: z.number().int().nonnegative(), parserVersion: z.number().int().nonnegative(), sourceFormat: z.enum(['exness-csv', 'mt5-xlsx']).optional() });
+const accountSchema = z.object({
+  id: z.string(), label: z.string(), accountNumber: z.string(), platform: z.literal('MT5'), server: z.string(), currency: z.string(), sourceTimeZone: z.string(),
+  // Backups from before prop firm desks existed carry no kind and were personal.
+  kind: z.enum(['personal', 'propfirm']).default('personal'),
+  startingBalance: decimalString.optional(), openedAt: z.string().optional(),
+  createdAt: isoString,
+});
+const importBatchSchema = z.object({ id: z.string(), accountId: z.string(), fileName: z.string(), fileHash: z.string(), importedAt: isoString, inserted: z.number().int().nonnegative(), duplicates: z.number().int().nonnegative(), failed: z.number().int().nonnegative(), parserVersion: z.number().int().nonnegative(), sourceFormat: z.enum(['exness-csv', 'mt5-xlsx', 'mt5-csv']).optional() });
 const dealSchema = z.object({ id: z.string(), accountId: z.string(), ticketId: z.string(), orderId: z.string(), positionId: z.string(), symbol: z.string(), side: z.enum(['buy', 'sell']), event: z.enum(['entry', 'exit', 'balance', 'unknown']), volume: decimalString, price: decimalString, occurredAt: isoString, sourceTime: z.string(), profit: decimalString, commission: decimalString, swap: decimalString, stopLoss: decimalString.optional(), takeProfit: decimalString.optional(), sourceRow: z.number().int().positive(), importBatchId: z.string().optional() });
 const positionSchema = z.object({ id: z.string(), accountId: z.string(), positionId: z.string(), symbol: z.string(), side: z.enum(['buy', 'sell']), openAt: isoString, closeAt: isoString.optional(), averageOpenPrice: decimalString, averageClosePrice: decimalString, volume: decimalString, grossProfit: decimalString, commission: decimalString, swap: decimalString, netProfit: decimalString, stopLoss: decimalString.optional(), takeProfit: decimalString.optional(), status: z.enum(['closed', 'open']), dealIds: z.array(z.string()), groupingFallback: z.boolean().optional() });
 const journalSchema = z.object({ id: z.string(), positionId: z.string(), strategy: z.string(), setup: z.string(), thesis: z.string(), emotion: z.string(), mistakes: z.array(z.string()), tags: z.array(z.string()), executionRating: z.number().min(1).max(5).optional(), riskAmount: decimalString.optional(), plannedRiskReward: decimalString.optional(), review: z.string(), createdAt: isoString, updatedAt: isoString });
 const weeklyReviewSchema = z.object({ id: z.string(), accountId: z.string(), weekStart: isoString, weekEnd: isoString, wentWell: z.string(), toImprove: z.string(), lesson: z.string(), nextWeekFocus: z.string(), createdAt: isoString, updatedAt: isoString });
 const balanceEventSchema = z.object({ id: z.string(), accountId: z.string(), ticketId: z.string(), type: z.enum(['deposit', 'withdrawal', 'credit', 'other']), amount: decimalString, occurredAt: isoString, comment: z.string() });
+const planSchema = z.object({
+  id: z.string(), accountId: z.string(), firm: z.string(), phase: z.string(),
+  startingBalance: decimalString, effectiveFrom: isoString,
+  resetTime: z.string(), resetTimeZone: z.string(),
+  maxDailyLossPct: z.number().nullable(), maxTotalLossPct: z.number().nullable(),
+  totalLossMode: z.enum(['static', 'trailing']),
+  profitTargetPct: z.number().nullable(), minTradingDays: z.number().int().nullable(), consistencyPct: z.number().nullable(),
+  softCaps: z.object({
+    tradesPerDay: z.number().int().positive().optional(),
+    lotsPerDay: z.number().positive().optional(),
+  }),
+  attested: z.array(z.object({ id: z.string(), text: z.string() })),
+  markdown: z.string(), createdAt: isoString, updatedAt: isoString,
+});
+const sessionSchema = z.object({
+  id: z.string(), accountId: z.string(), firmDay: z.string(),
+  lowestEquity: decimalString.optional(), checklist: z.array(z.string()), note: z.string(), updatedAt: isoString,
+});
 // z.object() strips unknown keys rather than rejecting them, so every field
 // that must survive a backup round trip has to be listed here. The two API
 // keys are intentionally absent: dataClient.loadSnapshot redacts them before
@@ -58,7 +89,8 @@ const settingsSchema = z.object({
 });
 
 const snapshotSchema = z.object({
-  schemaVersion: z.literal(BACKUP_SCHEMA_VERSION),
+  // Version 1 is still accepted: it is restored as the personal desks it held.
+  schemaVersion: z.union([z.literal(1), z.literal(BACKUP_SCHEMA_VERSION)]),
   exportedAt: isoString,
   accounts: z.array(accountSchema),
   importBatches: z.array(importBatchSchema).default([]),
@@ -67,8 +99,10 @@ const snapshotSchema = z.object({
   journals: z.array(journalSchema),
   weeklyReviews: z.array(weeklyReviewSchema).default([]),
   balanceEvents: z.array(balanceEventSchema),
+  plans: z.array(planSchema).default([]),
+  sessions: z.array(sessionSchema).default([]),
   settings: z.array(settingsSchema),
-});
+}).transform((value) => ({ ...value, schemaVersion: BACKUP_SCHEMA_VERSION }));
 
 const envelopeSchema = z.object({
   format: z.literal('ferik-trading-journal-encrypted'),

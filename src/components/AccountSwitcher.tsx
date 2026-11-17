@@ -21,6 +21,19 @@ export default function AccountSwitcher() {
     // which trigger a full navigation anyway.
   }, []);
 
+  /**
+   * The sidebar is server-rendered, so prop-only entries ship hidden and are
+   * revealed here once the active desk is known. A personal desk must not see a
+   * plan entry at any point, which is why the default is hidden rather than shown.
+   */
+  useEffect(() => {
+    const active = accounts.find((account) => account.id === accountId);
+    const show = !active || active.kind === 'propfirm';
+    document.querySelectorAll<HTMLElement>('[data-requires="propfirm"]').forEach((element) => {
+      element.hidden = !show;
+    });
+  }, [accounts, accountId]);
+
   if (accounts.length === 0) return null;
 
   return (

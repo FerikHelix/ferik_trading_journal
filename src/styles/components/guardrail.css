@@ -1,0 +1,42 @@
+/* A limit drawn as a bar, with its confidence word attached. */
+
+.guardrails { display: grid; gap: 14px; }
+
+.guardrail { display: grid; gap: 6px; }
+
+.guardrail__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.guardrail__label { font-size: 12.5px; font-weight: 650; }
+
+.guardrail__confidence { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+.guardrail__confidence--exact { color: var(--profit); border-color: color-mix(in srgb, var(--profit) 40%, var(--border)); }
+.guardrail__confidence--estimate { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); }
+.guardrail__confidence--attested { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, var(--border)); }
+
+.guardrail__track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-tertiary);
+  overflow: hidden;
+}
+.guardrail__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--text-secondary);
+  transition: width 160ms ease;
+}
+.guardrail--watch .guardrail__fill { background: var(--warning); }
+.guardrail--breach .guardrail__fill { background: var(--loss); }
+.guardrail--good .guardrail__fill { background: var(--profit); }
+
+.guardrail__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.guardrail__note { margin: 0; color: var(--text-tertiary); font-size: 11px; line-height: 1.5; }
+.guardrail__meta { margin: 14px 0 0; color: var(--text-tertiary); font-size: 11.5px; }

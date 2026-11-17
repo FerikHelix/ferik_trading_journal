@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ICONS } from '../../src/components/ui/icons';
-import { MOBILE_NAV_ITEMS, NAV_GROUPS, NAV_ITEMS, findNav, navHref } from '../../src/lib/nav';
+import { MOBILE_NAV_ITEMS, NAV_GROUPS, NAV_ITEMS, findNav, navGroupsFor, navHref } from '../../src/lib/nav';
 
 /**
  * Catches the class of mistake that is invisible until someone clicks:
@@ -35,10 +35,24 @@ describe('navigation', () => {
     expect(findNav('does-not-exist')).toBeNull();
   });
 
-  it('groups items into home, journal, and system sections', () => {
+  it('groups items into home, trading, and system sections', () => {
     expect(NAV_GROUPS.map((group) => group.id)).toEqual(['home', 'journal', 'system']);
-    const journal = NAV_GROUPS.find((group) => group.id === 'journal');
-    expect(journal?.items.map((item) => item.id)).toEqual(['trades', 'journal', 'analytics', 'review']);
+    const trading = NAV_GROUPS.find((group) => group.id === 'journal');
+    expect(trading?.items.map((item) => item.id)).toEqual(['trades', 'journal', 'plan']);
+  });
+
+  it('keeps the navigation to six destinations', () => {
+    expect(NAV_ITEMS).toHaveLength(6);
+  });
+
+  it('shows the prop-only destination for a prop desk and hides it for a personal desk', () => {
+    const ids = (kind: 'personal' | 'propfirm' | null) =>
+      navGroupsFor(kind).flatMap((group) => group.items.map((item) => item.id));
+
+    expect(ids('propfirm')).toContain('plan');
+    expect(ids('personal')).not.toContain('plan');
+    // No desk chosen yet can mean "all desks", which may include a challenge.
+    expect(ids(null)).toContain('plan');
   });
 
   it('keeps the mobile bar small enough to stay tappable', () => {

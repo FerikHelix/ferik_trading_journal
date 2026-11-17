@@ -3,8 +3,8 @@ import { calculateAnalytics } from '../../src/lib/analytics';
 import type { Account, Journal, Position } from '../../src/lib/domain/types';
 
 const accounts: Account[] = [
-  { id: 'usd', label: 'USD', accountNumber: '1', platform: 'MT5', server: 'demo', currency: 'USD', sourceTimeZone: 'UTC', createdAt: '2026-01-01T00:00:00Z' },
-  { id: 'eur', label: 'EUR', accountNumber: '2', platform: 'MT5', server: 'demo', currency: 'EUR', sourceTimeZone: 'UTC', createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'usd', label: 'USD', accountNumber: '1', platform: 'MT5', server: 'demo', currency: 'USD', sourceTimeZone: 'UTC', kind: 'personal', createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'eur', label: 'EUR', accountNumber: '2', platform: 'MT5', server: 'demo', currency: 'EUR', sourceTimeZone: 'UTC', kind: 'personal', createdAt: '2026-01-01T00:00:00Z' },
 ];
 const position = (id: string, netProfit: string, closeAt: string, accountId = 'usd'): Position => ({ id, accountId, positionId: id, symbol: 'XAUUSD', side: 'buy', openAt: '2026-01-01T00:00:00Z', closeAt, averageOpenPrice: '2000', averageClosePrice: '2001', volume: '0.1', grossProfit: netProfit, commission: '0', swap: '0', netProfit, status: 'closed', dealIds: [] });
 

@@ -1,11 +1,14 @@
 import Decimal from 'decimal.js';
 import { read, utils, type WorkSheet } from 'xlsx';
-import type { BalanceEvent, Deal, DetectedAccountMetadata, ImportIssue, ImportPreview, TradeSide } from '../domain/types';
+import type { BalanceEvent, Deal, DetectedAccountMetadata, ImportIssue, ImportPreview, ImportSourceFormat, TradeSide } from '../domain/types';
 import { sha256Bytes } from './hash';
 import { parseDecimal } from './numbers';
 import { parseBrokerTime } from './time';
 
-export const MT5_WORKBOOK_PARSER_VERSION = 1;
+/** One parser for the MT5 report; the workbook and the CSV are two containers for it. */
+export const MT5_REPORT_PARSER_VERSION = 1;
+/** @deprecated Use MT5_REPORT_PARSER_VERSION. */
+export const MT5_WORKBOOK_PARSER_VERSION = MT5_REPORT_PARSER_VERSION;
 
 type Row = string[];
 
@@ -103,18 +106,22 @@ function firstValueAfterLabel(row: Row): string {
   return row.slice(1).find((value) => value.trim()) ?? '';
 }
 
-export async function parseMt5Workbook(buffer: ArrayBuffer, sourceTimeZone: string): Promise<ImportPreview> {
-  const workbook = read(buffer);
-  let rows: Row[] | undefined;
-  for (const name of workbook.SheetNames) {
-    const candidate = worksheetRows(workbook.Sheets[name]);
-    if (findMarker(candidate, 'Trade History Report') >= 0 && findMarker(candidate, 'Positions') >= 0) {
-      rows = candidate;
-      break;
-    }
-  }
-  if (!rows) throw new Error('Worksheet report history MT5 tidak ditemukan.');
+export interface Mt5ReportSource {
+  sourceFormat: ImportSourceFormat;
+  sourceLabel: string;
+  fileHash: string;
+}
 
+/**
+ * The MT5 report as rows. This is the shared core: a workbook and a CSV export of
+ * the same report differ only in how the grid is produced, so everything from the
+ * Positions table onward is identical work.
+ */
+export async function parseMt5ReportRows(
+  rows: Row[],
+  sourceTimeZone: string,
+  source: Mt5ReportSource,
+): Promise<ImportPreview> {
   const positionsIndex = findMarker(rows, 'Positions');
   const ordersIndex = findMarker(rows, 'Orders', positionsIndex + 1);
   const headerIndex = positionHeaderIndex(rows, positionsIndex, ordersIndex);
@@ -236,15 +243,33 @@ export async function parseMt5Workbook(buffer: ArrayBuffer, sourceTimeZone: stri
   }
 
   return {
-    sourceFormat: 'mt5-xlsx',
-    sourceLabel: 'MT5 Workbook',
-    parserVersion: MT5_WORKBOOK_PARSER_VERSION,
+    sourceFormat: source.sourceFormat,
+    sourceLabel: source.sourceLabel,
+    parserVersion: MT5_REPORT_PARSER_VERSION,
     detectedAccount: accountMetadata(rows, sourceTimeZone),
     deals,
     balanceEvents,
     skipped,
     issues,
     preview,
-    fileHash: await sha256Bytes(buffer),
+    fileHash: source.fileHash,
   };
+}
+
+export async function parseMt5Workbook(buffer: ArrayBuffer, sourceTimeZone: string): Promise<ImportPreview> {
+  const workbook = read(buffer);
+  let rows: Row[] | undefined;
+  for (const name of workbook.SheetNames) {
+    const candidate = worksheetRows(workbook.Sheets[name]);
+    if (findMarker(candidate, 'Trade History Report') >= 0 && findMarker(candidate, 'Positions') >= 0) {
+      rows = candidate;
+      break;
+    }
+  }
+  if (!rows) throw new Error('Worksheet report history MT5 tidak ditemukan.');
+  return parseMt5ReportRows(rows, sourceTimeZone, {
+    sourceFormat: 'mt5-xlsx',
+    sourceLabel: 'MT5 Workbook',
+    fileHash: await sha256Bytes(buffer),
+  });
 }

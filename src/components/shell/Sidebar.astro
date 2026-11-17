@@ -27,6 +27,8 @@ const { active, base } = Astro.props;
                 class:list={['nav__link', { 'is-active': active === item.id }]}
                 href={navHref(base, item.path)}
                 aria-current={active === item.id ? 'page' : undefined}
+                data-requires={item.requires}
+                hidden={item.requires === 'propfirm'}
               >
                 <Icon name={item.icon} class="nav__icon" />
                 <span class="nav__text">{item.label}</span>

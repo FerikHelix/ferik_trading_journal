@@ -1,29 +1,28 @@
 import { expect, test } from './fixtures';
 
-test('sidebar groups every section and reaches core journal pages', async ({ page }) => {
+test('sidebar groups every section and reaches core pages', async ({ page }) => {
   await page.goto('/');
 
   const sidebar = page.locator('.sidebar');
-  // Scoped to the group heading: 'Jurnal' is also a nav item label.
   const headings = sidebar.locator('.nav__label');
-  await expect(headings).toHaveText(['Jurnal', 'Sistem']);
+  await expect(headings).toHaveText(['Trading', 'System']);
 
   await sidebar.getByRole('link', { name: 'Trades' }).click();
-  await expect(page.getByRole('heading', { name: 'Riwayat trading', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Trading history', level: 1 })).toBeVisible();
 
   await page.locator('.sidebar').getByRole('link', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings & backup', level: 1 })).toBeVisible();
 });
 
 test('topbar breadcrumb names the section and the page', async ({ page }) => {
-  await page.goto('/analytics/');
+  await page.goto('/plan/');
   const breadcrumb = page.locator('.breadcrumb');
-  await expect(breadcrumb).toContainText('Jurnal');
-  await expect(breadcrumb).toContainText('Trading analytics');
+  await expect(breadcrumb).toContainText('Trading');
+  await expect(breadcrumb).toContainText('Challenge plan');
 });
 
 test('every route responds and renders its shell', async ({ page }) => {
-  const routes = ['', 'trades/', 'journal/', 'analytics/', 'review/', 'import/', 'settings/'];
+  const routes = ['', 'trades/', 'journal/', 'plan/', 'import/', 'settings/'];
   for (const route of routes) {
     const response = await page.goto(`/${route}`);
     expect(response?.ok(), `/${route} should respond 200`).toBeTruthy();
@@ -51,10 +50,6 @@ test('chart marks are theme-specific so light mode stays legible', async ({ page
   // which is 1.9:1 on white — effectively invisible.
   await page.goto('/');
 
-  // Read the tokens off detached probe elements rather than by flipping
-  // <html>. The theme tokens are declared with attribute selectors, so they
-  // apply to any element, and this avoids racing the app's own theme logic
-  // (which re-asserts data-theme on <html> as the island hydrates).
   const tokens = await page.evaluate(() => {
     const read = (theme: string) => {
       const probe = document.createElement('div');

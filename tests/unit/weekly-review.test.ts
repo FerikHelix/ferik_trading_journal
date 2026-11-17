@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { calculateWeeklyReview, isMeaningfulJournal, shiftWeek, weekBounds } from '../../src/lib/review';
 import type { Account, Journal, Position } from '../../src/lib/domain/types';
 
-const account: Account = { id: 'a', label: 'Main', accountNumber: '1', platform: 'MT5', server: '', currency: 'USD', sourceTimeZone: 'UTC', createdAt: '2026-01-01T00:00:00Z' };
+const account: Account = { id: 'a', label: 'Main', accountNumber: '1', platform: 'MT5', server: '', currency: 'USD', sourceTimeZone: 'UTC', kind: 'personal', createdAt: '2026-01-01T00:00:00Z' };
 const position = (id: string, netProfit: string, closeAt: string): Position => ({ id, accountId: 'a', positionId: id, symbol: id === 'b' ? 'EURUSD' : 'XAUUSD', side: 'buy', openAt: '2026-01-01T00:00:00Z', closeAt, averageOpenPrice: '1', averageClosePrice: '1', volume: '1', grossProfit: netProfit, commission: '0', swap: '0', netProfit, status: 'closed', dealIds: [] });
 
 describe('weekly review helpers', () => {

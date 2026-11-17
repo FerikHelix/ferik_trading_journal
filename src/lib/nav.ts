@@ -1,3 +1,4 @@
+import type { DeskKind } from './domain/types';
 import type { IconName } from '../components/ui/icons';
 
 export interface NavItem {
@@ -12,6 +13,8 @@ export interface NavItem {
   icon: IconName;
   /** Shown in the compact bottom bar on small screens. */
   mobile?: boolean;
+  /** Only rendered when the active desk is of this kind. */
+  requires?: DeskKind;
 }
 
 export interface NavGroup {
@@ -26,28 +29,40 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'home',
     label: null,
     items: [
-      { id: 'dashboard', label: 'Overview', title: 'Overview', path: '', icon: 'layout-dashboard', mobile: true },
+      { id: 'dashboard', label: 'Today', title: 'Today', path: '', icon: 'layout-dashboard', mobile: true },
     ],
   },
   {
     id: 'journal',
-    label: 'Jurnal',
+    label: 'Trading',
     items: [
-      { id: 'trades', label: 'Trades', title: 'Riwayat trading', path: 'trades/', icon: 'list', mobile: true },
-      { id: 'journal', label: 'Jurnal', title: 'Jurnal posisi', path: 'journal/', icon: 'notebook-pen', mobile: true },
-      { id: 'analytics', label: 'Analytics', title: 'Trading analytics', path: 'analytics/', icon: 'bar-chart', mobile: true },
-      { id: 'review', label: 'Weekly Review', title: 'Weekly Review', path: 'review/', icon: 'calendar-check' },
+      { id: 'trades', label: 'Trades', title: 'Trading history', path: 'trades/', icon: 'list', mobile: true },
+      { id: 'journal', label: 'Journal', title: 'Trade journal', path: 'journal/', icon: 'notebook-pen', mobile: true },
+      { id: 'plan', label: 'Plan', title: 'Challenge plan', path: 'plan/', icon: 'shield-check', requires: 'propfirm' },
     ],
   },
   {
     id: 'system',
-    label: 'Sistem',
+    label: 'System',
     items: [
-      { id: 'import', label: 'Import', title: 'Import riwayat Exness', path: 'import/', icon: 'upload', mobile: true },
+      { id: 'import', label: 'Import', title: 'Import history', path: 'import/', icon: 'upload', mobile: true },
       { id: 'settings', label: 'Settings', title: 'Settings & backup', path: 'settings/', icon: 'settings' },
     ],
   },
 ];
+
+/**
+ * Navigation for a desk kind. An unknown kind (no desk selected yet) sees
+ * everything, because "all desks" can include a prop firm desk.
+ */
+export function navGroupsFor(kind: DeskKind | null | undefined): NavGroup[] {
+  return NAV_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.requires || kind === null || kind === undefined || item.requires === kind),
+    }))
+    .filter((group) => group.items.length > 0);
+}
 
 export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 

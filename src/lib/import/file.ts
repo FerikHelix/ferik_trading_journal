@@ -1,5 +1,6 @@
 import type { ImportPreview } from '../domain/types';
 import { detectImportFormat } from './detect';
+import { parseMt5Csv } from './mt5-csv';
 import { parseMt5Workbook } from './mt5-workbook';
 import { EXNESS_PARSER_VERSION, parseExnessCsv } from './parser';
 
@@ -7,12 +8,19 @@ export async function parseTradeHistoryFile(file: File, sourceTimeZone: string):
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   const format = detectImportFormat(bytes);
-  if (!format) throw new Error('Format file tidak didukung. Pilih MT5 workbook atau Exness CSV.');
+  if (!format) throw new Error('Format file tidak didukung. Pilih MT5 report (workbook/CSV) atau Exness CSV.');
   if (format === 'mt5-xlsx') {
     try {
       return await parseMt5Workbook(buffer, sourceTimeZone);
     } catch {
       throw new Error('Workbook MT5 tidak dapat dibaca. Pastikan file adalah report history MT5.');
+    }
+  }
+  if (format === 'mt5-csv') {
+    try {
+      return await parseMt5Csv(new TextDecoder().decode(bytes), sourceTimeZone);
+    } catch {
+      throw new Error('CSV report MT5 tidak dapat dibaca. Pastikan file adalah report history MT5.');
     }
   }
   try {

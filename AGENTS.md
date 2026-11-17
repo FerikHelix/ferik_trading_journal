@@ -61,11 +61,47 @@ need extra specificity to survive the cascade.
 ## Adding a page
 
 1. Add the entry to `src/lib/nav.ts` (grouped, with an icon from
-   `src/components/ui/icons.ts`).
+   `src/components/ui/icons.ts`). Set `requires: 'propfirm'` if the page only
+   makes sense for a challenge desk.
 2. Create `src/pages/<id>/index.astro` rendering `AppLayout active="<id>"`.
 
-`tests/unit/nav.test.ts` checks ids are unique, paths end in `/`, and every
-icon name exists.
+`tests/unit/nav.test.ts` checks ids are unique, paths end in `/`, every icon
+name exists, the navigation stays at six destinations, and `navGroupsFor(kind)`
+hides prop-only entries from a personal desk.
+
+The sidebar is server-rendered, so prop-only links ship with `hidden` and
+`AccountSwitcher` reveals them once the active desk is known. Do not render them
+unconditionally — a personal desk must not see a plan entry, even briefly.
+
+## Desks: personal and prop firm
+
+An `Account` is a **desk**, and its `kind` decides which physics apply. A
+personal desk is judged on results. A prop firm desk is judged on how much of
+each limit is left, so it carries a `Plan` the personal desk never sees.
+
+- `Account.startingBalance` is what every percentage is measured against. When
+  it is unset, percentages report as unavailable — never `0%`. A blank is
+  honest; zero is a lie.
+- `Plan` is stored as markdown plus a validated parse of its fenced `json` block.
+  `applyPlanText` is the only write path: a rejected paste writes nothing, so the
+  previous plan keeps guarding the desk.
+- Rules are a three-tier union (`src/lib/desk/rules.ts`): computed limits the
+  system derives, soft caps it counts against, and attested rules only the trader
+  can tick. Never auto-satisfy an attested rule from trade data.
+- Every guardrail reading carries a `confidence` of `exact`, `estimate` or
+  `attested`. Closed-trade exports cannot see an intrabar equity low, so a
+  realized-only daily loss must never be presented as breach-proof.
+
+## The day boundary
+
+`src/lib/desk/day.ts` computes a firm day from the plan's reset time and zone.
+Firms rarely reset at UTC midnight and never at the trader's display midnight, so
+every daily number (loss used, trade count, ticks) is bucketed through
+`firmDayKey`. Changing the reset clock in a plan re-groups history at read time;
+nothing is stored per position.
+
+Balance baselines are compared by day key, not timestamp, so no caller has to
+invert a timezone to find "the start of the day".
 
 ## Preact, not React
 
