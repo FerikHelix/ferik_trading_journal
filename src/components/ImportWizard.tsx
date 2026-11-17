@@ -1,158 +1,200 @@
 import { useEffect, useState } from 'preact/hooks';
-import type { Account, ImportPreview } from '../lib/domain/types';
-import type { ImportAccountTarget, ImportCommitResult } from '../lib/db';
-import { commitTradeHistory, loadAccounts, previewTradeHistory, resolveDetectedAccount } from './dataClient';
+import type { ImportPreview } from '../lib/domain/types';
+import { Badge, Card, EmptyState, Icon, Notice } from './ui';
+import { commitDetectedHistory, commitTradeHistory, previewTradeHistory } from './dataClient';
 
-const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+const base = import.meta.env.BASE_URL;
 
+interface Result {
+  desk: string;
+  file: string;
+  label: string;
+  inserted: number;
+  duplicates: number;
+  failed: number;
+  alreadyImported: boolean;
+  detected: boolean;
+}
+
+/**
+ * Import is one action: choose a file, and it lands on the desk the file names.
+ * The review step is gone because the parser is what the user trusts, and it
+ * reports afterwards what it did.
+ */
 export default function ImportWizard() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [file, setFile] = useState<File>();
-  const [parsed, setParsed] = useState<ImportPreview>();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [result, setResult] = useState<ImportCommitResult>();
-  const [accountMode, setAccountMode] = useState<'existing' | 'new'>('new');
-  const [accountId, setAccountId] = useState('');
-  const [form, setForm] = useState({ label: '', accountNumber: '', server: '', currency: 'USD' });
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => { setHydrated(true); }, []);  const [error, setError] = useState('');
+  const [result, setResult] = useState<Result>();
+  const [pending, setPending] = useState<{ parsed: ImportPreview; fileName: string }>();
+  const [manual, setManual] = useState({ label: '', server: '', currency: 'USD', accountNumber: '' });
 
-  useEffect(() => {
-    loadAccounts().then((items) => {
-      setAccounts(items);
-      setAccountId(items[0]?.id ?? '');
-      setAccountMode(items.length ? 'existing' : 'new');
-    }).catch(() => setError('Database lokal tidak dapat dibuka.'));
-  }, []);
-
-  function selectFile(next?: File) {
-    setFile(next);
-    setParsed(undefined);
-    setResult(undefined);
-    setError('');
-    setStep(1);
-  }
-
-  async function handlePreview() {
+  async function handleFile(file?: File) {
     if (!file) return;
     setBusy(true);
     setError('');
+    setResult(undefined);
+    setPending(undefined);
     try {
-      setParsed(await previewTradeHistory(file));
-      setStep(2);
+      const parsed = await previewTradeHistory(file);
+      if (!parsed.detectedAccount) {
+        setPending({ parsed, fileName: file.name });
+        return;
+      }
+      const committed = await commitDetectedHistory(parsed, file.name);
+      setResult({
+        desk: committed.account.label,
+        file: file.name,
+        label: parsed.sourceLabel,
+        inserted: committed.inserted,
+        duplicates: committed.duplicates,
+        failed: committed.failed,
+        alreadyImported: committed.alreadyImported,
+        detected: true,
+      });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'File tidak dapat dibaca.');
+      setError(caught instanceof Error ? caught.message : 'That file could not be imported.');
     } finally {
       setBusy(false);
     }
   }
 
-  function accountTarget(): ImportAccountTarget | undefined {
-    if (!parsed) return undefined;
-    if (parsed.detectedAccount) {
-      const existing = resolveDetectedAccount(accounts, parsed);
-      return existing
-        ? { kind: 'existing', accountId: existing.id }
-        : { kind: 'new', account: parsed.detectedAccount };
-    }
-    if (accountMode === 'existing' && accountId) return { kind: 'existing', accountId };
-    if (!form.label.trim() || !form.server.trim() || !form.currency.trim()) return undefined;
-    return {
-      kind: 'new',
-      account: {
-        label: form.label,
-        accountNumber: form.accountNumber,
-        server: form.server,
-        currency: form.currency,
-        sourceTimeZone: browserTimeZone(),
-      },
-    };
-  }
-
-  async function commit() {
-    const target = accountTarget();
-    if (!parsed || !file || !target) return;
+  async function commitPending() {
+    if (!pending) return;
     setBusy(true);
     setError('');
     try {
-      const committed = await commitTradeHistory(parsed, target, file.name);
-      setResult(committed);
-      setAccounts((items) => items.some((account) => account.id === committed.account.id) ? items : [...items, committed.account]);
-      setStep(3);
+      const committed = await commitTradeHistory(pending.parsed, {
+        kind: 'new',
+        account: {
+          ...manual,
+          sourceTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          kind: 'personal',
+        },
+      }, pending.fileName);
+      setResult({
+        desk: committed.account.label,
+        file: pending.fileName,
+        label: pending.parsed.sourceLabel,
+        inserted: committed.inserted,
+        duplicates: committed.duplicates,
+        failed: committed.failed,
+        alreadyImported: committed.alreadyImported,
+        detected: false,
+      });
+      setPending(undefined);
+      setManual({ label: '', server: '', currency: 'USD', accountNumber: '' });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Import gagal disimpan.');
+      setError(caught instanceof Error ? caught.message : 'The import could not be saved.');
     } finally {
       setBusy(false);
     }
   }
 
-  const detectedExisting = parsed ? resolveDetectedAccount(accounts, parsed) : undefined;
-  const manualReady = parsed?.detectedAccount || (accountMode === 'existing' ? Boolean(accountId) : Boolean(form.label.trim() && form.server.trim() && form.currency.trim()));
+  return (
+    <Card
+      title="Import history"
+      description="MT5 report (workbook or CSV) or Exness CSV. Processed locally, never uploaded."
+      badge={result ? <Badge tone="profit">done</Badge> : undefined}
+    >
+      {/* The static HTML ships a file input with no listener; choosing a file in
+          that window would do nothing at all. Do not remove this gate. */}
+      <div className="import-surface" data-import-ready={hydrated ? 'true' : 'false'}>
+      {error && <Notice tone="error">{error}</Notice>}
 
-  return <section className="card">
-    <div className="stepper">
-      {['File', 'Review', 'Selesai'].map((label, index) => <div className={`step ${step === index + 1 ? 'active' : step > index + 1 ? 'done' : ''}`} key={label}>
-        <span className="step-number">{step > index + 1 ? '✓' : index + 1}</span><span>{label}</span>
-      </div>)}
-    </div>
-
-    {error && <div className="notice error" role="alert">{error}</div>}
-
-    {step === 1 && <div className="grid">
       <label className="dropzone">
         <input
           type="file"
           accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           hidden
-          onChange={(event) => selectFile(event.currentTarget.files?.[0])}
+          onChange={(event) => {
+            const input = event.currentTarget;
+            handleFile(input.files?.[0]);
+            input.value = '';
+          }}
         />
         <div>
-          <div className="empty-icon" style={{ margin: '0 auto 14px' }}>⇧</div>
-          <h3>{file?.name ?? 'Pilih MT5 workbook atau Exness CSV'}</h3>
-          <p className="muted">Klik untuk memilih file. Data diproses lokal dan tidak diunggah ke server.</p>
-          {file && <span className="badge">{(file.size / 1024).toFixed(1)} KB</span>}
+          <div className="empty-icon"><Icon name="upload" size={20} /></div>
+          <h3>{busy ? 'Reading…' : 'Choose a session export'}</h3>
+          <p className="muted">
+            The desk is taken from the file's own account number. Re-importing overlapping history only adds what is new.
+          </p>
         </div>
       </label>
-      <div className="actions"><button className="btn primary" disabled={!file || busy} onClick={handlePreview}>{busy ? 'Membaca…' : 'Preview import'}</button></div>
-    </div>}
 
-    {step === 2 && parsed && <div className="grid">
-      <div className="card-head">
-        <div><span className="badge">{parsed.sourceLabel}</span><h3>{parsed.detectedAccount?.label ?? 'Pilih account tujuan'}</h3></div>
-        {parsed.detectedAccount && <span className="muted">{detectedExisting ? 'Account existing' : 'Account baru otomatis'}</span>}
+      {pending && (
+        <div className="grid panel">
+          <Notice tone="warning" title="This file does not say which desk it belongs to">
+            Give it a name once. The next export of the same account will find it on its own.
+          </Notice>
+          <div className="form-grid">
+            <Field label="Desk name" value={manual.label} onInput={(value) => setManual({ ...manual, label: value })} />
+            <Field label="Account number (optional)" value={manual.accountNumber} onInput={(value) => setManual({ ...manual, accountNumber: value })} />
+            <Field label="Broker / server" value={manual.server} onInput={(value) => setManual({ ...manual, server: value })} />
+            <Field label="Currency" value={manual.currency} onInput={(value) => setManual({ ...manual, currency: value.toUpperCase() })} />
+          </div>
+          <div className="actions">
+            <button className="btn" onClick={() => setPending(undefined)}>Cancel</button>
+            <button
+              className="btn primary"
+              disabled={busy || !manual.label.trim() || !manual.server.trim() || !manual.currency.trim()}
+              onClick={commitPending}
+            >
+              Save import
+            </button>
+          </div>
+        </div>
+      )}
+
+      {result ? (
+        <div className="import-result">
+          <div className="import-result__head">
+            <Icon name={result.alreadyImported ? 'inbox' : 'shield-check'} size={18} />
+            <strong>{result.alreadyImported ? 'Already imported' : 'Imported'}</strong>
+            <Badge>{result.label}</Badge>
+          </div>
+          <p>
+            <strong>{result.file}</strong> → <strong>{result.desk}</strong>
+            {result.detected ? ' (resolved from the file)' : ' (named by you)'}.
+          </p>
+          <div className="grid three-col">
+            <Mini label="New" value={result.inserted} />
+            <Mini label="Duplicate" value={result.duplicates} />
+            <Mini label="Failed" value={result.failed} />
+          </div>
+          <div className="actions">
+            <a className="btn primary" href={`${base}trades/`}>See the calendar</a>
+            <a className="btn" href={`${base}`}>Back to Today</a>
+          </div>
+        </div>
+      ) : !pending ? (
+        <EmptyState
+          icon="upload"
+          title="No file chosen"
+          description="The first import creates the desk. After that, the file finds it."
+          compact
+        />
+      ) : null}
       </div>
-
-      {!parsed.detectedAccount && <div className="grid" style={{ maxWidth: 650 }}>
-        {accounts.length > 0 && <div className="field"><label>Trading account</label><select value={accountMode === 'new' ? 'new' : accountId} onChange={(event) => {
-          if (event.currentTarget.value === 'new') setAccountMode('new');
-          else { setAccountMode('existing'); setAccountId(event.currentTarget.value); }
-        }}>{accounts.map((account) => <option value={account.id} key={account.id}>{account.label}</option>)}<option value="new">+ Buat account baru</option></select></div>}
-        {accountMode === 'new' && <div className="form-grid">
-          <Field label="Nama account" value={form.label} onInput={(value) => setForm({ ...form, label: value })} />
-          <Field label="Broker / server" value={form.server} onInput={(value) => setForm({ ...form, server: value })} />
-          <Field label="Nomor account (opsional)" value={form.accountNumber} onInput={(value) => setForm({ ...form, accountNumber: value })} />
-          <Field label="Currency" value={form.currency} onInput={(value) => setForm({ ...form, currency: value.toUpperCase() })} />
-        </div>}
-      </div>}
-
-      <div className="grid three-col">
-        <Mini label="Trade valid" value={parsed.deals.length} />
-        <Mini label="Balance event" value={parsed.balanceEvents.length} />
-        <Mini label="Issue" value={parsed.issues.length} />
-      </div>
-      {parsed.issues.length > 0 && <div className="notice warning">{parsed.issues.slice(0, 5).map((issue) => <div key={`${issue.row}-${issue.message}`}>Baris {issue.row}: {issue.message}</div>)}</div>}
-      <div className="table-wrap" style={{ margin: 0 }}><table><thead><tr>{Object.keys(parsed.preview[0] ?? {}).slice(0, 6).map((heading) => <th key={heading}>{heading}</th>)}</tr></thead><tbody>{parsed.preview.slice(0, 5).map((row, index) => <tr key={index}>{Object.values(row).slice(0, 6).map((value, column) => <td key={column}>{value}</td>)}</tr>)}</tbody></table></div>
-      <div className="actions"><button className="btn" onClick={() => setStep(1)}>← Ganti file</button><button className="btn primary" disabled={!manualReady || busy} onClick={commit}>{busy ? 'Menyimpan…' : 'Simpan import'}</button></div>
-    </div>}
-
-    {step === 3 && <div className="empty"><div className="empty-icon">✓</div><h3>{result?.alreadyImported ? 'File sudah pernah diimpor' : 'Import selesai'}</h3><p>{result?.inserted ?? 0} data baru, {result?.duplicates ?? 0} duplikat, dan {result?.failed ?? 0} gagal.</p><div className="actions"><a className="btn primary" href={`${import.meta.env.BASE_URL}trades/`}>Lihat trades</a><button className="btn" onClick={() => selectFile(undefined)}>Import lagi</button></div></div>}
-  </section>;
+    </Card>
+  );
 }
 
 function Field({ label, value, onInput }: { label: string; value: string; onInput: (value: string) => void }) {
-  return <div className="field"><label>{label}</label><input aria-label={label} value={value} onInput={(event) => onInput(event.currentTarget.value)} /></div>;
+  return (
+    <div className="field">
+      <label>{label}</label>
+      <input aria-label={label} value={value} onInput={(event) => onInput(event.currentTarget.value)} />
+    </div>
+  );
 }
 
 function Mini({ label, value }: { label: string; value: number }) {
-  return <div className="card"><div className="stat-label">{label}</div><div className="stat-value">{value}</div></div>;
+  return (
+    <div className="card">
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+    </div>
+  );
 }
+

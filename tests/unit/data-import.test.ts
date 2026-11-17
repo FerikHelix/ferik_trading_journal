@@ -102,8 +102,8 @@ describe('Dexie schema', () => {
     await database.open();
     expect(await database.settings.get('app')).toMatchObject({ schemaVersion: 1, theme: 'system' });
     await database.accounts.bulkAdd([
-      { id: 'a', label: 'A', accountNumber: '1', platform: 'MT5', server: '', currency: 'USD', sourceTimeZone: 'UTC', createdAt: '2026-01-01T00:00:00Z' },
-      { id: 'b', label: 'B', accountNumber: '2', platform: 'MT5', server: '', currency: 'USD', sourceTimeZone: 'UTC', createdAt: '2026-01-01T00:00:00Z' },
+      { id: 'a', label: 'A', accountNumber: '1', platform: 'MT5', server: '', currency: 'USD', sourceTimeZone: 'UTC', kind: 'personal', createdAt: '2026-01-01T00:00:00Z' },
+      { id: 'b', label: 'B', accountNumber: '2', platform: 'MT5', server: '', currency: 'USD', sourceTimeZone: 'UTC', kind: 'personal', createdAt: '2026-01-01T00:00:00Z' },
     ]);
     const base: Deal = { id: 'a:1', accountId: 'a', ticketId: '1', orderId: '1', positionId: '1', symbol: 'EURUSD', side: 'buy', event: 'entry', volume: '1', price: '1', occurredAt: '2026-01-01T00:00:00Z', sourceTime: '', profit: '0', commission: '0', swap: '0', sourceRow: 1 };
     await database.deals.bulkAdd([base, { ...base, id: 'b:1', accountId: 'b' }]);
@@ -119,16 +119,17 @@ describe('Dexie schema', () => {
 
 describe('import account resolution', () => {
   const accounts: Account[] = [
-    { id: 'a', label: 'Vantage Main', accountNumber: '123', platform: 'MT5', server: 'Broker-Live', currency: 'USD', sourceTimeZone: 'UTC', createdAt: '2026-01-01T00:00:00Z' },
-    { id: 'b', label: 'No Number', accountNumber: '', platform: 'MT5', server: 'Other-Live', currency: 'USD', sourceTimeZone: 'UTC', createdAt: '2026-01-01T00:00:00Z' },
+    { id: 'a', label: 'Vantage Main', accountNumber: '123', platform: 'MT5', server: 'Broker-Live', currency: 'USD', sourceTimeZone: 'UTC', kind: 'personal', createdAt: '2026-01-01T00:00:00Z' },
+    { id: 'b', label: 'No Number', accountNumber: '', platform: 'MT5', server: 'Other-Live', currency: 'USD', sourceTimeZone: 'UTC', kind: 'personal', createdAt: '2026-01-01T00:00:00Z' },
   ];
 
-  it('matches account number and server without case or whitespace sensitivity', () => {
+  it('matches on account number alone and ignores the server label', () => {
     expect(findMatchingAccount(accounts, { label: 'Different', accountNumber: ' 123 ', server: ' broker-live ', currency: 'USD', sourceTimeZone: 'UTC' })?.id).toBe('a');
-    expect(findMatchingAccount(accounts, { label: 'Vantage Main', accountNumber: '123', server: 'another-server', currency: 'USD', sourceTimeZone: 'UTC' })).toBeUndefined();
+    // The old rule keyed on server too, which forked a desk whenever a broker renamed it.
+    expect(findMatchingAccount(accounts, { label: 'Vantage Main', accountNumber: '123', server: 'another-server', currency: 'USD', sourceTimeZone: 'UTC' })?.id).toBe('a');
   });
 
-  it('falls back to label and server only when account number is absent', () => {
+  it('falls back to label only when no account number exists on either side', () => {
     expect(findMatchingAccount(accounts, { label: ' no number ', accountNumber: '', server: 'OTHER-LIVE', currency: 'USD', sourceTimeZone: 'UTC' })?.id).toBe('b');
     expect(findMatchingAccount(accounts, { label: 'No Number', accountNumber: '999', server: 'Other-Live', currency: 'USD', sourceTimeZone: 'UTC' })).toBeUndefined();
   });

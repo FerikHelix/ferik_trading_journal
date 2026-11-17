@@ -1,0 +1,40 @@
+/* The three-tier rule wall and the day's attestation rows. */
+
+.rule-wall { display: grid; gap: 16px; }
+.rule-wall__group { display: grid; gap: 6px; }
+
+.rule-wall__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rule-wall__row {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-secondary);
+  font-size: 12px;
+}
+
+.rule-list { display: grid; gap: 2px; margin-top: 12px; }
+
+.rule-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.rule-row:first-child { border-top: 0; }
+.rule-row input[type='checkbox'] { width: 15px; height: 15px; }
+
+.error-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12px; }
+.error-list code { font-size: 11px; opacity: 0.8; }

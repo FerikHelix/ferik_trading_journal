@@ -1,0 +1,68 @@
+/* One month of trading, cell by cell. */
+
+.calendar { display: grid; gap: 10px; }
+
+.calendar__head { display: flex; align-items: center; justify-content: space-between; }
+.calendar__month { font-size: 13px; font-weight: 650; letter-spacing: 0.01em; }
+
+.calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.calendar__weekday {
+  padding: 2px 4px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cal-cell {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  min-height: 78px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-secondary);
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: default;
+}
+
+.cal-cell--blank { border: 0; background: transparent; min-height: 78px; }
+.cal-cell--empty { opacity: 0.55; }
+.cal-cell--traded { cursor: pointer; }
+.cal-cell--traded:hover { border-color: var(--border-strong); }
+.cal-cell--win { border-left: 3px solid var(--profit); }
+.cal-cell--loss { border-left: 3px solid var(--loss); }
+.cal-cell.is-selected { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+.cal-cell__day { font-size: 11px; font-weight: 650; color: var(--text-secondary); }
+.cal-cell__count { font-size: 11px; color: var(--text-secondary); }
+.cal-cell__amount { font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.cal-cell__pct { font-size: 10.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.cal-cell__idle { font-size: 10.5px; color: var(--text-tertiary); }
+
+/* Share of the daily loss limit already spent. Prop desks only. */
+.cal-budget {
+  display: block;
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.cal-budget > span { display: block; height: 100%; background: var(--text-tertiary); }
+.cal-budget--watch > span { background: var(--warning); }
+.cal-budget--breach > span { background: var(--loss); }
+
+@media (max-width: 720px) {
+  .cal-cell { min-height: 62px; padding: 5px; }
+  .cal-cell__idle, .cal-cell__pct { display: none; }
+}

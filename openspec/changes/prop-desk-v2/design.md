@@ -170,6 +170,16 @@ Day-open balance = `startingBalance` + preceding deposits − withdrawals. If
 `startingBalance` is unset, percent is `null`, never `0`. The product prompts for
 the balance once on the first visit after upgrade and never blocks on it.
 
+### Limits are fixed money amounts off the challenge balance
+
+A firm's "5% daily loss" becomes a fixed amount computed from
+`Plan.startingBalance`, not a percentage of each day's opening balance. This
+matters when a day is funded by a deposit: the limit must not move because money
+arrived mid-challenge. The day's *result* still reports as a percentage of that
+day's opening balance, because that is what makes losses comparable across days
+and account sizes. Two different bases for two different questions, kept apart
+deliberately.
+
 ### No new dependencies
 
 zod is already present for validation, `Intl` covers timezones, `Decimal` covers

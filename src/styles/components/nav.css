@@ -21,6 +21,8 @@
   font-weight: 550;
 }
 .nav__link:hover { color: var(--text-primary); background: var(--surface-hover); }
+/* `display: flex` above beats the hidden attribute; keep the attribute honest. */
+.nav__link[hidden] { display: none; }
 .nav__link.is-active {
   color: var(--brand);
   background: var(--brand-subtle);

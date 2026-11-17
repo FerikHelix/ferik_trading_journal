@@ -1,3 +1,4 @@
+import Papa from 'papaparse';
 import { utils, write } from 'xlsx';
 
 export interface Mt5FixtureOptions {
@@ -9,7 +10,12 @@ export interface Mt5FixtureOptions {
   omitPositionsHeader?: boolean;
 }
 
-export function makeMt5Workbook(options: Mt5FixtureOptions = {}): Uint8Array {
+/**
+ * The report grid, independent of container. The workbook and the CSV fixtures
+ * both start from these rows, which is the point: the broker hands out the same
+ * report in two wrappers.
+ */
+export function mt5ReportRows(options: Mt5FixtureOptions = {}): Array<Array<string | number>> {
   const rows: Array<Array<string | number>> = [];
   for (let index = 0; index < (options.extraLeadingRows ?? 0); index += 1) rows.push([]);
   rows.push(['Trade History Report']);
@@ -35,8 +41,16 @@ export function makeMt5Workbook(options: Mt5FixtureOptions = {}): Uint8Array {
   rows.push(['Results']);
   rows.push(['Total Net Profit:', '', '', '8.00']);
   rows.push(['Total Trades:', '', '', options.wrongTotalTrades ? '99' : '2']);
+  return rows;
+}
 
+export function makeMt5Workbook(options: Mt5FixtureOptions = {}): Uint8Array {
   const workbook = utils.book_new();
-  utils.book_append_sheet(workbook, utils.aoa_to_sheet(rows), options.sheetName ?? 'Statement');
+  utils.book_append_sheet(workbook, utils.aoa_to_sheet(mt5ReportRows(options)), options.sheetName ?? 'Statement');
   return new Uint8Array(write(workbook, { type: 'array', bookType: 'xlsx' }));
+}
+
+/** The same report saved as CSV, with quoting so the metadata comma survives. */
+export function makeMt5CsvText(options: Mt5FixtureOptions = {}): string {
+  return Papa.unparse(mt5ReportRows(options));
 }

@@ -3,6 +3,7 @@ export * from './accounts';
 export * from './detect';
 export * from './file';
 export * from './hash';
+export * from './mt5-csv';
 export * from './mt5-workbook';
 export * from './numbers';
 export * from './parser';

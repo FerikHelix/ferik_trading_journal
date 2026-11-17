@@ -39,21 +39,22 @@ const CSV = [
 
 async function importTwoTrades(page: import('@playwright/test').Page) {
   await page.goto('/import/');
-  await page.getByLabel('Nomor account').fill('123456');
-  await page.getByRole('button', { name: /Lanjut pilih file/ }).click();
+  await page.locator('[data-import-ready="true"]').waitFor();
   await page.locator('input[type="file"]').setInputFiles({
     name: 'history.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from(CSV),
   });
-  await page.getByRole('button', { name: /Preview CSV/ }).click();
-  await page.getByRole('button', { name: 'Simpan import' }).click();
-  await expect(page.getByRole('heading', { name: 'Import selesai' })).toBeVisible();
+  await page.getByLabel('Desk name').fill('Personal Exness');
+  await page.getByLabel('Broker / server').fill('Exness-Live');
+  await page.getByRole('button', { name: 'Save import' }).click();
+  await expect(page.getByText('Imported', { exact: true })).toBeVisible();
 }
 
 test('typing in the trades search filters the table before any blur', async ({ page }) => {
   await importTwoTrades(page);
   await page.goto('/trades/');
+  await page.getByRole('tab', { name: /^List/ }).click();
 
   const rows = page.locator('tbody tr');
   await expect(rows).toHaveCount(2);

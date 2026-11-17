@@ -1,9 +1,12 @@
 import Dexie, { type EntityTable } from 'dexie';
+import Decimal from 'decimal.js';
 import type {
-  Account, AppSettings, BalanceEvent, Deal, ImportBatch, Journal,
-  ImportPreview, Position, WeeklyReview,
+  Account, AppSettings, BalanceEvent, Deal, DeskKind, ImportBatch, Journal,
+  ImportPreview, Plan, Position, Session, WeeklyReview,
 } from '../domain/types';
 import { aggregatePositions } from '../import/aggregate';
+import { findMatchingAccount } from '../import/accounts';
+import { parsePlanMarkdown, type PlanError } from '../desk/plan';
 
 export class TradingJournalDatabase extends Dexie {
   accounts!: EntityTable<Account, 'id'>;
@@ -13,6 +16,8 @@ export class TradingJournalDatabase extends Dexie {
   journals!: EntityTable<Journal, 'id'>;
   weeklyReviews!: EntityTable<WeeklyReview, 'id'>;
   balanceEvents!: EntityTable<BalanceEvent, 'id'>;
+  plans!: EntityTable<Plan, 'id'>;
+  sessions!: EntityTable<Session, 'id'>;
   settings!: EntityTable<AppSettings, 'id'>;
 
   /**
@@ -49,6 +54,18 @@ export class TradingJournalDatabase extends Dexie {
     // v5 drops marketCandles and signalAlerts as the application is simplified
     // back to a core trading journal with zero external market polling.
     this.version(5).stores({ marketCandles: null, signalAlerts: null });
+    // v6 introduces prop firm desks. All additive: two new tables and one
+    // backfilled field on accounts. Every pre-v6 account becomes personal,
+    // which is what it was, and keeps no starting balance — an honest gap,
+    // because a history imported mid-account cannot prove its own baseline.
+    this.version(6).stores({
+      plans: '&id, &accountId, updatedAt',
+      sessions: '&id, &[accountId+firmDay], accountId, firmDay',
+    }).upgrade(async (transaction) => {
+      await transaction.table('accounts').toCollection().modify((account: Account) => {
+        if (!account.kind) account.kind = 'personal';
+      });
+    });
     this.on('populate', () => this.settings.add(defaultSettings()));
   }
 }
@@ -66,14 +83,17 @@ export const db = new TradingJournalDatabase();
 const id = (prefix: string) => `${prefix}_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
 
 export type NewAccount = Pick<Account, 'label' | 'server' | 'currency' | 'sourceTimeZone'>
-  & Partial<Pick<Account, 'id' | 'accountNumber' | 'createdAt'>>;
+  & Partial<Pick<Account, 'id' | 'accountNumber' | 'createdAt' | 'kind' | 'startingBalance' | 'openedAt'>>;
 
 function buildAccount(input: NewAccount): Account {
   const account: Account = {
     id: input.id ?? id('account'), label: input.label.trim(), accountNumber: input.accountNumber?.trim() ?? '',
     platform: 'MT5', server: input.server.trim(), currency: input.currency.trim().toUpperCase(),
-    sourceTimeZone: input.sourceTimeZone, createdAt: input.createdAt ?? new Date().toISOString(),
+    sourceTimeZone: input.sourceTimeZone, kind: input.kind ?? 'personal',
+    createdAt: input.createdAt ?? new Date().toISOString(),
   };
+  if (input.startingBalance !== undefined) account.startingBalance = input.startingBalance;
+  if (input.openedAt !== undefined) account.openedAt = input.openedAt;
   if (!account.label || !account.server || !account.currency) throw new Error('Label, server, dan currency wajib diisi.');
   return account;
 }
@@ -135,7 +155,6 @@ export async function upsertJournal(input: JournalInput): Promise<Journal> {
 }
 
 export type WeeklyReviewInput = Pick<WeeklyReview, 'accountId' | 'weekStart' | 'weekEnd'> & Partial<Omit<WeeklyReview, 'accountId' | 'weekStart' | 'weekEnd' | 'updatedAt'>>;
-
 export async function getWeeklyReview(accountId: string, weekStart: string): Promise<WeeklyReview | undefined> {
   return db.weeklyReviews.where('[accountId+weekStart]').equals([accountId, weekStart]).first();
 }
@@ -153,6 +172,245 @@ export async function upsertWeeklyReview(input: WeeklyReviewInput): Promise<Week
   return review;
 }
 
+/* ------------------------------------------------------------------ *
+ * Prop firm desks: kind changes and challenge plans
+ * ------------------------------------------------------------------ */
+
+export type PlanInput = Pick<Plan, 'accountId' | 'startingBalance' | 'effectiveFrom' | 'resetTime' | 'resetTimeZone'>
+  & Partial<Omit<Plan, 'accountId' | 'startingBalance' | 'effectiveFrom' | 'resetTime' | 'resetTimeZone' | 'updatedAt'>>;
+
+export const getPlan = (accountId: string): Promise<Plan | undefined> =>
+  db.plans.where('accountId').equals(accountId).first();
+
+/**
+ * A plan exists only on a prop firm desk, and a desk that carries a plan cannot
+ * quietly become personal — that would leave a plan nothing evaluates.
+ */
+export async function savePlan(input: PlanInput): Promise<Plan> {
+  return db.transaction('rw', db.accounts, db.plans, async () => {
+    const account = await db.accounts.get(input.accountId);
+    if (!account) throw new Error('Akun tidak ditemukan.');
+    if (account.kind !== 'propfirm') throw new Error('Plan hanya dapat dipasang pada akun prop firm.');
+    const existing = await db.plans.where('accountId').equals(input.accountId).first();
+    const now = new Date().toISOString();
+    const plan: Plan = {
+      id: existing?.id ?? input.id ?? id('plan'),
+      accountId: input.accountId,
+      firm: input.firm ?? existing?.firm ?? '',
+      phase: input.phase ?? existing?.phase ?? '',
+      startingBalance: input.startingBalance,
+      effectiveFrom: input.effectiveFrom,
+      resetTime: input.resetTime,
+      resetTimeZone: input.resetTimeZone,
+      maxDailyLossPct: input.maxDailyLossPct ?? existing?.maxDailyLossPct ?? null,
+      maxTotalLossPct: input.maxTotalLossPct ?? existing?.maxTotalLossPct ?? null,
+      totalLossMode: input.totalLossMode ?? existing?.totalLossMode ?? 'static',
+      profitTargetPct: input.profitTargetPct ?? existing?.profitTargetPct ?? null,
+      minTradingDays: input.minTradingDays ?? existing?.minTradingDays ?? null,
+      consistencyPct: input.consistencyPct ?? existing?.consistencyPct ?? null,
+      softCaps: input.softCaps ?? existing?.softCaps ?? {},
+      attested: input.attested ?? existing?.attested ?? [],
+      markdown: input.markdown ?? existing?.markdown ?? '',
+      createdAt: existing?.createdAt ?? input.createdAt ?? now,
+      updatedAt: now,
+    };
+    await db.plans.put(plan);
+    return plan;
+  });
+}
+
+export async function deletePlan(accountId: string): Promise<void> {
+  await db.plans.where('accountId').equals(accountId).delete();
+}
+
+export interface AccountMergeReport {
+  survivorId: string;
+  mergedId: string;
+  moved: { batches: number; deals: number; balanceEvents: number; positions: number; plans: number; sessions: number; journals: number };
+  skipped: { batches: number; deals: number; balanceEvents: number; plans: number; sessions: number; journals: number };
+}
+
+/**
+ * Folds one desk into another and deletes the one that lost.
+ *
+ * Duplicates are expected: before account matching keyed on the account number,
+ * a broker renaming its server forked one account into two desks holding
+ * overlapping history. Nothing is merged silently — callers show the counts — and
+ * nothing is thrown away when a record already exists on the survivor.
+ */
+export async function mergeAccounts(survivorId: string, mergedId: string): Promise<AccountMergeReport> {
+  if (survivorId === mergedId) throw new Error('Pilih dua akun yang berbeda.');
+  return db.transaction(
+    'rw',
+    [db.accounts, db.importBatches, db.deals, db.balanceEvents, db.positions, db.plans, db.sessions, db.journals],
+    async () => {
+      const survivor = await db.accounts.get(survivorId);
+      const merged = await db.accounts.get(mergedId);
+      if (!survivor || !merged) throw new Error('Akun tidak ditemukan.');
+
+      const report: AccountMergeReport = {
+        survivorId, mergedId,
+        moved: { batches: 0, deals: 0, balanceEvents: 0, positions: 0, plans: 0, sessions: 0, journals: 0 },
+        skipped: { batches: 0, deals: 0, balanceEvents: 0, plans: 0, sessions: 0, journals: 0 },
+      };
+
+      for (const batch of await db.importBatches.where('accountId').equals(mergedId).toArray()) {
+        await db.importBatches.delete(batch.id);
+        const clash = await db.importBatches.where('[accountId+fileHash]').equals([survivorId, batch.fileHash]).first();
+        if (clash) { report.skipped.batches += 1; continue; }
+        await db.importBatches.put({ ...batch, accountId: survivorId });
+        report.moved.batches += 1;
+      }
+
+      for (const deal of await db.deals.where('accountId').equals(mergedId).toArray()) {
+        const nextId = `${survivorId}:${deal.ticketId}`;
+        const clash = await db.deals.get(nextId);
+        await db.deals.delete(deal.id);
+        if (clash) { report.skipped.deals += 1; continue; }
+        await db.deals.add({ ...deal, id: nextId, accountId: survivorId });
+        report.moved.deals += 1;
+      }
+
+      for (const event of await db.balanceEvents.where('accountId').equals(mergedId).toArray()) {
+        const nextId = `${survivorId}:${event.ticketId}`;
+        const clash = await db.balanceEvents.get(nextId);
+        await db.balanceEvents.delete(event.id);
+        if (clash) { report.skipped.balanceEvents += 1; continue; }
+        await db.balanceEvents.add({ ...event, id: nextId, accountId: survivorId });
+        report.moved.balanceEvents += 1;
+      }
+
+      const mergedPositions = await db.positions.where('accountId').equals(mergedId).toArray();
+      report.moved.positions = mergedPositions.length;
+      await db.positions.bulkDelete(mergedPositions.map((position) => position.id));
+
+      const allDeals = await db.deals.where('accountId').equals(survivorId).toArray();
+      const rebuilt = aggregatePositions(allDeals);
+      const survivorPositionIds = (await db.positions.where('accountId').equals(survivorId).primaryKeys()) as string[];
+      await db.positions.bulkDelete(survivorPositionIds);
+      await db.positions.bulkPut(rebuilt);
+
+      const survivorPositionByReference = new Map(rebuilt.map((position) => [position.positionId, position.id]));
+      for (const journal of await db.journals.toArray()) {
+        const source = mergedPositions.find((position) => position.id === journal.positionId);
+        if (!source) continue;
+        const target = survivorPositionByReference.get(source.positionId);
+        if (!target || target === journal.positionId) continue;
+        const clash = await db.journals.where('positionId').equals(target).first();
+        if (clash) { report.skipped.journals += 1; continue; }
+        await db.journals.put({ ...journal, positionId: target });
+        report.moved.journals += 1;
+      }
+
+      const mergedPlan = await db.plans.where('accountId').equals(mergedId).first();
+      if (mergedPlan) {
+        const survivorPlan = await db.plans.where('accountId').equals(survivorId).first();
+        await db.plans.delete(mergedPlan.id);
+        if (survivorPlan) {
+          report.skipped.plans += 1;
+        } else {
+          await db.plans.put({ ...mergedPlan, accountId: survivorId });
+          report.moved.plans += 1;
+        }
+      }
+
+      for (const session of await db.sessions.where('accountId').equals(mergedId).toArray()) {
+        await db.sessions.delete(session.id);
+        const clash = await getSession(survivorId, session.firmDay);
+        if (clash) { report.skipped.sessions += 1; continue; }
+        await db.sessions.put({ ...session, accountId: survivorId });
+        report.moved.sessions += 1;
+      }
+
+      await db.accounts.delete(mergedId);
+      return report;
+    },
+  );
+}
+
+export type ApplyPlanResult =
+  | { ok: true; plan: Plan }
+  | { ok: false; errors: PlanError[]; markdown: string };/**
+ * The only write path for a plan: paste markdown, parse it, store it.
+ *
+ * A rejected paste writes nothing at all, so the plan already in force keeps
+ * guarding the desk and the user can fix the text instead of retyping it.
+ */
+export async function applyPlanText(accountId: string, markdown: string): Promise<ApplyPlanResult> {
+  const parsed = parsePlanMarkdown(markdown);
+  if (!parsed.ok) return parsed;
+  const plan = await savePlan({
+    accountId,
+    ...parsed.machine,
+    attested: parsed.attested,
+    markdown: parsed.markdown,
+  });
+  return { ok: true, plan };
+}
+
+export type AccountFactsInput = Partial<Pick<Account, 'label' | 'accountNumber' | 'server' | 'currency' | 'startingBalance' | 'openedAt'>>;
+
+/**
+ * Editing account facts re-derives every percentage but never rewrites imported
+ * history: deals, positions and balance events are left exactly as they are.
+ */
+export async function updateAccountFacts(accountId: string, input: AccountFactsInput): Promise<Account> {
+  const account = await db.accounts.get(accountId);
+  if (!account) throw new Error('Akun tidak ditemukan.');
+  if (input.startingBalance !== undefined) {
+    let parsed: Decimal;
+    try {
+      parsed = new Decimal(input.startingBalance);
+    } catch {
+      throw new Error('Saldo awal harus angka.');
+    }
+    if (!parsed.isFinite() || parsed.lt(0)) throw new Error('Saldo awal tidak boleh negatif.');
+  }
+  const updated: Account = { ...account, ...input };
+  await db.accounts.put(updated);
+  return updated;
+}
+
+export async function setAccountKind(accountId: string, kind: DeskKind): Promise<Account> {  return db.transaction('rw', db.accounts, db.plans, async () => {
+    const account = await db.accounts.get(accountId);
+    if (!account) throw new Error('Akun tidak ditemukan.');
+    if (kind === 'personal') {
+      const plan = await db.plans.where('accountId').equals(accountId).first();
+      if (plan) throw new Error('Lepaskan plan challenge sebelum mengubah akun menjadi personal.');
+    }
+    const updated: Account = { ...account, kind };
+    await db.accounts.put(updated);
+    return updated;
+  });
+}
+
+export type SessionInput = Pick<Session, 'accountId' | 'firmDay'>
+  & Partial<Omit<Session, 'accountId' | 'firmDay' | 'updatedAt'>>;
+
+export const getSession = (accountId: string, firmDay: string): Promise<Session | undefined> =>
+  db.sessions.where('[accountId+firmDay]').equals([accountId, firmDay]).first();
+
+/**
+ * One row per desk per firm day. Ticks and the note belong to that day only; the
+ * day boundary is the caller's clock, which is why it is a stored label rather
+ * than recomputed at read time.
+ */
+export async function saveSession(input: SessionInput): Promise<Session> {
+  const existing = await getSession(input.accountId, input.firmDay);
+  const session: Session = {
+    id: existing?.id ?? input.id ?? id('session'),
+    accountId: input.accountId,
+    firmDay: input.firmDay,
+    checklist: input.checklist ?? existing?.checklist ?? [],
+    note: input.note ?? existing?.note ?? '',
+    updatedAt: new Date().toISOString(),
+  };
+  const lowestEquity = input.lowestEquity ?? existing?.lowestEquity;
+  if (lowestEquity !== undefined) session.lowestEquity = lowestEquity;
+  await db.sessions.put(session);
+  return session;
+}
+
 export interface ImportCommitResult {
   account: Account;
   batch?: ImportBatch;
@@ -162,10 +420,27 @@ export interface ImportCommitResult {
   alreadyImported: boolean;
   positions: Position[];
 }
-
 export type ImportAccountTarget =
   | { kind: 'existing'; accountId: string }
   | { kind: 'new'; account: NewAccount };
+
+/**
+ * The zero-prompt path: the export already knows which account it belongs to.
+ *
+ * A detected account that is not stored yet becomes a personal desk, because that
+ * is the safe default — nobody's money is governed by a challenge plan until they
+ * say so. Promotion to a prop desk is an explicit later step.
+ */
+export async function importDetectedHistory(preview: ImportPreview, fileName: string): Promise<ImportCommitResult> {
+  if (!preview.detectedAccount) throw new Error('File tidak memuat identitas akun.');
+  const existing = findMatchingAccount(await getAccounts(), preview.detectedAccount);
+  if (existing) return importParsedData({ kind: 'existing', accountId: existing.id }, fileName, preview);
+  return importParsedData(
+    { kind: 'new', account: { ...preview.detectedAccount, kind: 'personal' } },
+    fileName,
+    preview,
+  );
+}
 
 function uniqueById<T extends { id: string }>(records: T[]): T[] {
   return [...new Map(records.map((record) => [record.id, record])).values()];
@@ -225,8 +500,7 @@ export async function importParsedData(
   });
 }
 
-/** Remove imported broker data but deliberately preserve journals, which become orphaned. */
-export async function deleteImportBatch(batchId: string): Promise<void> {
+/** Remove imported broker data but deliberately preserve journals, which become orphaned. */export async function deleteImportBatch(batchId: string): Promise<void> {
   await db.transaction('rw', db.importBatches, db.deals, db.balanceEvents, db.positions, async () => {
     const batch = await db.importBatches.get(batchId);
     if (!batch) return;
