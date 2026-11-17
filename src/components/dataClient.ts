@@ -1,6 +1,6 @@
-import type { Account, AppSettings, Journal, Position, Deal, ParsedImport, WeeklyReview } from '../lib/domain/types';
-import { db, clearAllData, createAccount, getAccounts, getAppSettings, getJournals, getPositions, getPositionWithDeals, getWeeklyReview, importParsedData, updateThemePreference, upsertJournal, upsertWeeklyReview, type ImportCommitResult } from '../lib/db';
-import { EXNESS_PARSER_VERSION, parseExnessCsv } from '../lib/import';
+import type { Account, AppSettings, Journal, Position, Deal, ImportPreview, WeeklyReview } from '../lib/domain/types';
+import { db, clearAllData, getAccounts, getAppSettings, getJournals, getPositions, getPositionWithDeals, getWeeklyReview, importParsedData, updateThemePreference, upsertJournal, upsertWeeklyReview, type ImportAccountTarget, type ImportCommitResult } from '../lib/db';
+import { findMatchingAccount, parseTradeHistoryFile } from '../lib/import';
 import type { BackupSnapshot } from '../lib/backup';
 
 export async function loadAccounts(): Promise<Account[]> {
@@ -29,10 +29,6 @@ export async function loadPositionBundle(id: string): Promise<{ position?: Posit
   return { ...bundle, journal };
 }
 
-export async function addAccount(input: Omit<Account, 'id' | 'createdAt' | 'platform'>): Promise<Account> {
-  return createAccount(input);
-}
-
 export async function saveJournal(journal: Journal): Promise<void> {
   await upsertJournal(journal);
 }
@@ -45,17 +41,17 @@ export async function saveWeeklyReview(review: WeeklyReview): Promise<void> {
   await upsertWeeklyReview(review);
 }
 
-export async function previewCsv(file: File, account: Account): Promise<ParsedImport> {
-  return parseExnessCsv(await file.text(), account.id, account.sourceTimeZone);
+export async function previewTradeHistory(file: File): Promise<ImportPreview> {
+  const sourceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  return parseTradeHistoryFile(file, sourceTimeZone);
 }
 
-export async function commitCsv(parsed: ParsedImport, account: Account, fileName: string): Promise<ImportCommitResult> {
-  return importParsedData({ kind: 'existing', accountId: account.id }, fileName, {
-    ...parsed,
-    sourceFormat: 'exness-csv',
-    sourceLabel: 'Exness CSV',
-    parserVersion: EXNESS_PARSER_VERSION,
-  });
+export function resolveDetectedAccount(accounts: Account[], preview: ImportPreview): Account | undefined {
+  return preview.detectedAccount ? findMatchingAccount(accounts, preview.detectedAccount) : undefined;
+}
+
+export async function commitTradeHistory(parsed: ImportPreview, target: ImportAccountTarget, fileName: string): Promise<ImportCommitResult> {
+  return importParsedData(target, fileName, parsed);
 }
 
 export async function loadSnapshot(): Promise<BackupSnapshot> {

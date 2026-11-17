@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { makeMt5Workbook } from '../fixtures/mt5Workbook';
 
 /**
  * The import fixture used to hard-code 2026.09.01, which sat exactly one week
@@ -39,6 +40,25 @@ test('all static routes render and navigation works', async ({ page }) => {
 test('empty journal route is safe without a position id', async ({ page }) => {
   await page.goto('/journal/');
   await expect(page.getByText('Pilih trade untuk dijurnal')).toBeVisible();
+});
+
+test('MT5 workbook creates its detected account without manual input', async ({ page }) => {
+  await page.goto('/import/');
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'history.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: Buffer.from(makeMt5Workbook({ sheetName: 'Broker Export', extraLeadingRows: 3 })),
+  });
+  await page.getByRole('button', { name: 'Preview import' }).click();
+  await expect(page.getByText('MT5 Workbook')).toBeVisible();
+  await expect(page.getByText('Example Broker Ltd · 123456')).toBeVisible();
+  await expect(page.getByText(/2 trade valid/)).toBeVisible();
+  await expect(page.getByLabel('Nama account')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Simpan import' }).click();
+  await expect(page.getByRole('heading', { name: 'Import selesai' })).toBeVisible();
+  await expect(page.getByText(/3 data baru/)).toBeVisible();
+  await page.goto('/trades/');
+  await expect(page.locator('tbody tr')).toHaveCount(2);
 });
 
 test('theme follows system by default and persists a manual choice', async ({ page }) => {
