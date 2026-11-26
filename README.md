@@ -1,67 +1,78 @@
 # FerikTrading
 
-**FerikTrading** adalah trading journal offline-first yang berjalan sepenuhnya di browser Anda. Dirancang khusus untuk trader MetaTrader 5 (Exness) yang mengutamakan privasi, performa cepat, dan evaluasi trading yang terstruktur.
+A trading journal for MetaTrader 5 that runs in the browser and works offline. There is no account, no server and no telemetry. Your data stays in your browser.
 
-Semua data tersimpan secara lokal di IndexedDB browser Anda. Tidak ada backend, tidak ada pelacakan analytics, dan tidak ada data trading yang pernah dikirim ke server luar.
+**Live:** https://ferikhelix.github.io/ferik_trading_journal/
 
----
+## What it does
 
-## Fitur Utama
+There are two kinds of desk:
 
-- **Import CSV Exness (MT5):** Unggah riwayat order CSV dari Personal Area Exness. Deal dan order secara otomatis diagregasi menjadi posisi trading yang rapi beserta komisi dan swap.
-- **Ringkasan Jurnal (Dashboard):** Tampilan cepat untuk metrik performa utama (Net P&L, Win Rate, Profit Factor), daftar trade yang belum dievaluasi, dan trade terbaru.
-- **Riwayat Trading (Trades):** Pencatatan lengkap seluruh posisi tertutup dengan filter simbol, arah posisi, dan tanggal.
-- **Jurnal Posisi (Journal):** Ruang refleksi untuk setiap trade — catat alasan entry, strategi, kesalahan eksekusi, serta tag emosi/setup.
-- **Trading Analytics:** Analisis statistik mendalam, rasio win/loss, profit factor, serta visualisasi performa trading.
-- **Weekly Review:** Evaluasi mingguan terstruktur untuk membangun konsistensi dan disiplin trading.
-- **Backup Terenkripsi:** Ekspor seluruh data journal ke file lokal dengan enkripsi password AES-GCM atau JSON polos.
+- **Personal desk:** judged on results. It has trades, a calendar, analytics and notes.
+- **Prop firm desk:** judged on how much of each firm limit you have left. It adds a challenge plan, guardrails and a daily checklist.
 
----
+The app has six pages:
 
-## Memulai & Menjalankan Lokal
+- **Today:** drop in the day's export to see the day's result, how much of each limit it used, the checklist and a note.
+- **Trades:** a calendar of daily results (money, % of the day's opening balance and, on a prop desk, the share of the daily loss budget used), plus list and analytics views.
+- **Plan** (prop desks only): the firm's rules as markdown with one fenced `json` block. You can paste a rule page and have an AI fill in the block. The app validates it, and a rejected paste leaves the old plan in place.
+- **Journal:** notes for each position (strategy, setup, thesis, execution rating, mistakes, tags) and weekly reviews.
+- **Import:** see below.
+- **Settings:** desk type, starting balance, duplicate merging, theme, backup and restore, and deleting local data.
 
-### Prasyarat
-- **Node.js** 22.12 atau lebih baru.
-- **npm** (atau package manager pilihan Anda).
+Each guardrail value carries a confidence label:
 
-### Instalasi & Dev Server
+| Label | Meaning |
+| --- | --- |
+| `exact` | Fully determined by the imported history |
+| `estimate` | An equity-based limit approximated from closed trades |
+| `attested` | Refined by a value you entered, such as the day's lowest equity |
+
+A closed-trade export can't see the lowest equity during a day, so a daily loss based on closed trades is never shown as proof that no intraday breach happened. Enter the day's lowest equity to make that day attested.
+
+## Import
+
+The app detects the format from the file's contents. It reads:
+
+- an MT5 report saved as `.xlsx`
+- an MT5 report saved as CSV
+- an Exness deal-history CSV
+
+The desk is matched by the account number in the file. If you import overlapping history again, only the new trades are added.
+
+## Run it locally
+
+You need Node.js 22.12 or newer.
+
 ```sh
-npm install
-npm run dev
+npm ci
+npm run dev        # http://localhost:4321/
+npm run build      # production build in dist/
+npm run check      # type check
+npm test           # unit tests (vitest)
+npm run test:e2e   # Playwright, local only, not run in CI
 ```
 
-Buka browser di `http://localhost:4321/` (atau port yang ditampilkan terminal).
+If `astro preview` detaches into the background and Playwright fails, start `npm run preview` yourself and then run `npx playwright test`. If port 4321 is taken, use `PREVIEW_PORT=4331`.
 
-### Quality Checks
-```sh
-npm run check       # Typecheck Astro & TypeScript
-npm test            # Unit tests (Vitest)
-npm run build       # Production bundle build
+## Your data
+
+- Everything is stored in the browser's IndexedDB (`ferik-trading-journal`). Imports are parsed in the page and nothing is uploaded.
+- Clearing site data deletes the journal, and there is no server copy. Back up from Settings regularly, either as plain `.ftj.json` or encrypted `.ftj.enc.json` (AES-GCM).
+
+## Project layout
+
+```
+src/lib/         import parsing, desks, guardrails, storage
+src/components/  Preact islands, one per page plus shared UI
+src/pages/       the six pages
+tests/unit/      vitest (runs in CI)
+tests/e2e/       Playwright (local only)
+openspec/        specs and the archive of shipped changes
 ```
 
----
+Rules for contributors and agents are in [AGENTS.md](./AGENTS.md).
 
-## Alur Penggunaan
+## Deployment
 
-1. **Unduh Riwayat Exness:** Ekspor riwayat order CSV dari Exness Personal Area atau terminal MT5.
-2. **Import CSV:** Buka menu **Import** dan buat profil account MT5. Periksa preview data lalu simpan import.
-3. **Lengkapi Jurnal:** Di menu **Dashboard** atau **Trades**, klik trade yang selesai dan isi catatan evaluasi pada menu **Jurnal**.
-4. **Evaluasi Rutin:** Buka **Analytics** untuk melihat statistik trading dan **Weekly Review** di akhir pekan.
-5. **Backup Berkala:** Buka menu **Settings** dan lakukan backup terenkripsi (`.ftj.enc.json`) untuk mengamankan data Anda.
-
----
-
-## Privasi & Keamanan Data
-
-- **Offline-First:** Seluruh database menggunakan Dexie IndexedDB dengan nama `ferik-trading-journal`.
-- **Zero Telemetry:** Tidak ada pengiriman data ke pihak ketiga.
-- **Pembersihan Cache:** Menghapus "Site Data" atau cache browser dapat menghapus database lokal. Selalu lakukan backup rutin dari menu **Settings**.
-
----
-
-## Deployment (GitHub Pages)
-
-Aplikasi ini di-deploy secara otomatis ke GitHub Pages menggunakan GitHub Actions (`.github/workflows/deploy.yml`):
-
-1. Repository default dinamai `ferik_trading_journal` (sesuai base path pada `astro.config.mjs`).
-2. Setiap push ke branch `main` akan menjalankan unit test, typecheck, dan build sebelum dipublikasikan ke GitHub Pages.
+The app is published to GitHub Pages by `.github/workflows/deploy.yml`, which runs the tests and the type check before building. Only `main` deploys. `v1.0` is kept on `archive/v1` as the rollback point.
